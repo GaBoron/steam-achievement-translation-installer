@@ -1,0 +1,221 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+
+import pytest
+
+from satl.cli import main
+
+
+def make_fixture(root: Path, *, status: str = "current") -> tuple[Path, Path]:
+    steam = root / "Steam"
+    (steam / "steamapps").mkdir(parents=True)
+    (steam / "steam.exe").write_bytes(b"")
+    (steam / "steamapps" / "appmanifest_123.acf").write_text('"AppState" {}', encoding="utf-8")
+    data_dir = root / "data"
+    (data_dir / "cache").mkdir(parents=True)
+    payload = b"translated"
+    catalog = {
+        "version": 1,
+        "entries": [
+            {
+                "game_id": "123",
+                "game_name": "CLI Game",
+                "status": status,
+                "schema_file": "files/123/UserGameStatsSchema_123.bin",
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "file_size_bytes": len(payload),
+                "achievement_count": 1,
+            }
+        ],
+    }
+    (data_dir / "cache" / "index.json").write_text(json.dumps(catalog), encoding="utf-8")
+    schema = data_dir / "cache" / "schemas" / f"{hashlib.sha256(payload).hexdigest()}.bin"
+    schema.parent.mkdir(parents=True)
+    schema.write_bytes(payload)
+    return steam, data_dir
+
+
+def test_scan_json_has_stable_fields(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    steam, data_dir = make_fixture(tmp_path)
+    result = main(
+        [
+            "scan",
+            "--offline",
+            "--json",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+    assert result == 0
+    output = json.loads(capsys.readouterr().out)
+    assert len(output) == 1
+    assert set(output[0]) == {
+        "app_id",
+        "game_name",
+        "discovery",
+        "catalog_status",
+        "variants",
+        "installed_state",
+        "action",
+        "error",
+    }
+    assert output[0]["discovery"] == ["installed"]
+
+
+def test_install_dry_run_creates_no_target_or_state(tmp_path: Path, capsys) -> None:
+    steam, data_dir = make_fixture(tmp_path)
+    result = main(
+        [
+            "install",
+            "123",
+            "--offline",
+            "--dry-run",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+    assert result == 0
+    assert "dry-run" in capsys.readouterr().out
+    assert not (steam / "appcache").exists()
+    assert not (data_dir / "state.json").exists()
+
+
+def test_noninteractive_install_requires_yes(tmp_path: Path, monkeypatch, capsys) -> None:
+    steam, data_dir = make_fixture(tmp_path)
+    monkeypatch.setattr("satl.cli.sys.stdin.isatty", lambda: False)
+    result = main(
+        [
+            "install",
+            "123",
+            "--offline",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+    assert result == 2
+    assert "--yes" in capsys.readouterr().err
+    assert not (steam / "appcache").exists()
+
+
+def test_install_and_status_offline(tmp_path: Path, monkeypatch, capsys) -> None:
+    steam, data_dir = make_fixture(tmp_path)
+    monkeypatch.setattr("satl.cli.is_steam_running", lambda: False)
+    result = main(
+        [
+            "install",
+            "123",
+            "--offline",
+            "--yes",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+    assert result == 0
+    capsys.readouterr()
+    target = steam / "appcache" / "stats" / "UserGameStatsSchema_123.bin"
+    assert target.read_bytes() == b"translated"
+
+    result = main(["status", "123", "--offline", "--json", "--data-dir", str(data_dir)])
+    assert result == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output[0]["installed_state"] == "installed"
+
+
+def test_non_current_entry_requires_explicit_override(tmp_path: Path, capsys) -> None:
+    steam, data_dir = make_fixture(tmp_path, status="possibly-outdated")
+    result = main(
+        [
+            "install",
+            "123",
+            "--offline",
+            "--dry-run",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+    assert result == 2
+    assert "--allow-outdated" in capsys.readouterr().err
+
+    result = main(
+        [
+            "install",
+            "123",
+            "--offline",
+            "--allow-outdated",
+            "--dry-run",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+    assert result == 0
+
+
+def test_restore_dry_run_does_not_change_installed_file(tmp_path: Path, monkeypatch, capsys) -> None:
+    steam, data_dir = make_fixture(tmp_path)
+    monkeypatch.setattr("satl.cli.is_steam_running", lambda: False)
+    assert main(
+        [
+            "install",
+            "123",
+            "--offline",
+            "--yes",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    ) == 0
+    target = steam / "appcache" / "stats" / "UserGameStatsSchema_123.bin"
+    before = target.read_bytes()
+    state_before = (data_dir / "state.json").read_bytes()
+    capsys.readouterr()
+
+    result = main(
+        [
+            "restore",
+            "123",
+            "--dry-run",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+    assert result == 0
+    assert target.read_bytes() == before
+    assert (data_dir / "state.json").read_bytes() == state_before
+
+
+def test_invalid_status_and_restore_ids_return_usage_error(tmp_path: Path, capsys) -> None:
+    data_dir = tmp_path / "data"
+    assert main(["status", "not-an-id", "--offline", "--data-dir", str(data_dir)]) == 2
+    assert "无效" in capsys.readouterr().err
+
+    steam, _ = make_fixture(tmp_path / "second")
+    assert main(
+        [
+            "restore",
+            "not-an-id",
+            "--dry-run",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    ) == 2
+    assert "无效" in capsys.readouterr().err
