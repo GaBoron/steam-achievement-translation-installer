@@ -24,8 +24,6 @@
                     AutomationProperties.Name="筛选日志" />
             </CommandBar.Content>
             <AppBarButton Icon="Refresh" Label="刷新" Click="Refresh_Click" />
-            <AppBarToggleButton x:Name="WordWrapButton" Label="自动换行" IsChecked="True" Click="WordWrap_Click" AutomationProperties.Name="切换日志自动换行" />
-            <AppBarButton Icon="OpenFile" Label="打开目录" Click="OpenDirectory_Click" />
             <AppBarButton Icon="Delete" Label="清理日志" Click="Clear_Click" />
         </CommandBar>
         <TextBox
