@@ -9,7 +9,9 @@ import pytest
 from satl.cli import main
 
 
-def make_fixture(root: Path, *, status: str = "current") -> tuple[Path, Path]:
+def make_fixture(
+    root: Path, *, status: str = "current", game_name: str = "CLI Game"
+) -> tuple[Path, Path]:
     steam = root / "Steam"
     (steam / "steamapps").mkdir(parents=True)
     (steam / "steam.exe").write_bytes(b"")
@@ -22,7 +24,7 @@ def make_fixture(root: Path, *, status: str = "current") -> tuple[Path, Path]:
         "entries": [
             {
                 "game_id": "123",
-                "game_name": "CLI Game",
+                "game_name": game_name,
                 "status": status,
                 "schema_file": "files/123/UserGameStatsSchema_123.bin",
                 "sha256": hashlib.sha256(payload).hexdigest(),
@@ -95,6 +97,29 @@ def test_scan_jsonl_has_versioned_event_sequence(tmp_path: Path, capsys) -> None
     assert all(event["protocol_version"] == 1 for event in events)
     assert events[2]["payload"]["app_id"] == "123"
     assert events[-1]["payload"]["exit_code"] == 0
+
+
+def test_jsonl_escapes_cjk_for_codepage_safe_transport(tmp_path: Path, capsys) -> None:
+    steam, data_dir = make_fixture(tmp_path, game_name="以撒的结合：重生")
+
+    result = main(
+        [
+            "scan",
+            "--offline",
+            "--jsonl",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+
+    assert result == 0
+    output = capsys.readouterr().out
+    assert "以撒的结合" not in output
+    assert "\\u4ee5\\u6492\\u7684\\u7ed3\\u5408" in output
+    events = jsonl_events(output)
+    assert events[2]["payload"]["game_name"] == "以撒的结合：重生"
 
 
 def test_json_and_jsonl_are_mutually_exclusive(tmp_path: Path, capsys) -> None:

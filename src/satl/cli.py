@@ -144,7 +144,10 @@ def _emit_jsonl(operation: str, event: str, payload: dict[str, Any]) -> None:
                 "event": event,
                 "payload": payload,
             },
-            ensure_ascii=False,
+            # JSONL is a machine protocol that may cross a Windows console-codepage
+            # boundary in the frozen executable. ASCII escapes keep the byte stream
+            # lossless; JSON consumers reconstruct the original Unicode text.
+            ensure_ascii=True,
             separators=(",", ":"),
             sort_keys=True,
         ),
