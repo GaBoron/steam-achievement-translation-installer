@@ -6,11 +6,21 @@ $PackageRoot = Join-Path $DistRoot "package-win-x64"
 $GuiPublishRoot = Join-Path $DistRoot "gui-win-x64"
 $ReleaseRoot = Join-Path $DistRoot "release"
 $GuiBuildRoot = Join-Path $ProjectRoot "build\gui-publish-intermediate"
+$CliBuildRoot = Join-Path $ProjectRoot "build\cli-launcher-publish"
+$CliPayloadRoot = Join-Path $ProjectRoot "build\cli-payload"
+$DownloadRoot = Join-Path $ProjectRoot "build\downloads"
 $VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 $Python = if (Test-Path $VenvPython) { $VenvPython } else { "python" }
 $GuiProject = Join-Path $ProjectRoot "src\Satl.Gui\Satl.Gui.csproj"
+$CliLauncherProject = Join-Path $ProjectRoot "src\Satl.CliLauncher\Satl.CliLauncher.csproj"
 $InstallerScript = Join-Path $ProjectRoot "installer\SATLInstaller.iss"
 $IconPath = Join-Path $ProjectRoot "src\Satl.Gui\Assets\AppIcon.ico"
+$EmbeddedPythonVersion = "3.13.13"
+$EmbeddedPythonArchiveName = "python-$EmbeddedPythonVersion-embed-amd64.zip"
+$EmbeddedPythonArchive = Join-Path $DownloadRoot $EmbeddedPythonArchiveName
+$EmbeddedPythonPartial = "$EmbeddedPythonArchive.part"
+$EmbeddedPythonUrl = "https://www.python.org/ftp/python/$EmbeddedPythonVersion/$EmbeddedPythonArchiveName"
+$EmbeddedPythonSha256 = "8766a8775746235e23cf5aee5027ab1060bb981d93110577adcf3508aa0cbd55"
 
 [xml] $GuiProjectXml = Get-Content -LiteralPath $GuiProject -Raw -Encoding UTF8
 $Version = @($GuiProjectXml.Project.PropertyGroup.Version | Where-Object { $_ })[0]
@@ -41,12 +51,76 @@ function Find-InnoCompiler {
     return $Candidates | Select-Object -First 1
 }
 
-@($DistRoot, $CliRoot, $PackageRoot, $GuiPublishRoot, $ReleaseRoot, $GuiBuildRoot) |
+@($DistRoot, $CliRoot, $PackageRoot, $GuiPublishRoot, $ReleaseRoot, $GuiBuildRoot,
+    $CliBuildRoot, $CliPayloadRoot, $DownloadRoot) |
     ForEach-Object { Assert-WithinProject $_ }
 
 Push-Location $ProjectRoot
 try {
-    & $Python -m PyInstaller --noconfirm --clean --onedir --name satl --paths src src/satl/__main__.py
+    foreach ($Path in @($CliRoot, $CliBuildRoot, $CliPayloadRoot)) {
+        if (Test-Path $Path) {
+            Remove-Item -LiteralPath $Path -Recurse -Force
+        }
+        New-Item -ItemType Directory -Path $Path | Out-Null
+    }
+    if (-not (Test-Path $DownloadRoot)) {
+        New-Item -ItemType Directory -Path $DownloadRoot | Out-Null
+    }
+    if (Test-Path $EmbeddedPythonArchive) {
+        $CachedPythonHash = (Get-FileHash -LiteralPath $EmbeddedPythonArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($CachedPythonHash -ne $EmbeddedPythonSha256) {
+            Remove-Item -LiteralPath $EmbeddedPythonArchive -Force
+        }
+    }
+    if (-not (Test-Path $EmbeddedPythonArchive)) {
+        if (Test-Path $EmbeddedPythonPartial) {
+            Remove-Item -LiteralPath $EmbeddedPythonPartial -Force
+        }
+        Invoke-WebRequest -Uri $EmbeddedPythonUrl -OutFile $EmbeddedPythonPartial
+        $DownloadedPythonHash = (Get-FileHash -LiteralPath $EmbeddedPythonPartial -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($DownloadedPythonHash -ne $EmbeddedPythonSha256) {
+            Remove-Item -LiteralPath $EmbeddedPythonPartial -Force
+            throw "Downloaded embedded Python archive checksum mismatch: $DownloadedPythonHash"
+        }
+        Move-Item -LiteralPath $EmbeddedPythonPartial -Destination $EmbeddedPythonArchive
+    }
+    $EmbeddedPythonActualHash = (Get-FileHash -LiteralPath $EmbeddedPythonArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($EmbeddedPythonActualHash -ne $EmbeddedPythonSha256) {
+        throw "Embedded Python archive checksum mismatch: $EmbeddedPythonActualHash"
+    }
+
+    $EmbeddedRuntimeRoot = Join-Path $CliRoot "_satl_runtime"
+    New-Item -ItemType Directory -Path $EmbeddedRuntimeRoot | Out-Null
+    Expand-Archive -LiteralPath $EmbeddedPythonArchive -DestinationPath $EmbeddedRuntimeRoot
+    foreach ($UnusedRuntimeFile in @("pythonw.exe", "python.cat")) {
+        $UnusedRuntimePath = Join-Path $EmbeddedRuntimeRoot $UnusedRuntimeFile
+        if (Test-Path $UnusedRuntimePath) {
+            Remove-Item -LiteralPath $UnusedRuntimePath -Force
+        }
+    }
+
+    Copy-Item -LiteralPath (Join-Path $ProjectRoot "src\satl") -Destination $CliPayloadRoot -Recurse
+    Copy-Item -LiteralPath (Join-Path $ProjectRoot "src\satl\__main__.py") -Destination $CliPayloadRoot
+    Get-ChildItem -LiteralPath $CliPayloadRoot -Directory -Filter "__pycache__" -Recurse |
+        Remove-Item -Recurse -Force
+    & $Python -m zipapp $CliPayloadRoot -o (Join-Path $EmbeddedRuntimeRoot "satl.pyz")
+    if ($LASTEXITCODE -ne 0) {
+        throw "SATL Python archive build failed"
+    }
+
+    & dotnet publish $CliLauncherProject `
+        -c Release `
+        -r win-x64 `
+        --self-contained true `
+        "-p:Version=$Version" `
+        "-p:AssemblyVersion=$Version.0" `
+        "-p:FileVersion=$Version.0" `
+        "-p:InformationalVersion=$Version" `
+        -o $CliBuildRoot
+    if ($LASTEXITCODE -ne 0) {
+        throw "SATL native launcher publish failed"
+    }
+    Copy-Item -Path (Join-Path $CliBuildRoot "*") -Destination $CliRoot -Recurse
     $CliVersion = & (Join-Path $CliRoot "satl.exe") --version
     if ($LASTEXITCODE -ne 0 -or $CliVersion -ne "satl $Version") {
         throw "Built satl.exe has unexpected version: $CliVersion"

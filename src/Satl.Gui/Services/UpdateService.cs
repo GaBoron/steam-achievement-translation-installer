@@ -1,5 +1,4 @@
-using System.Net.Http.Headers;
-using System.Text.Json;
+using System.Net;
 
 namespace Satl_Gui.Services;
 
@@ -16,7 +15,7 @@ public sealed class UpdateService
 {
     public const string RepositoryUrl = "https://github.com/GaBoron/steam-achievement-translation-installer";
     private static readonly Uri DefaultEndpoint = new(
-        "https://api.github.com/repos/GaBoron/steam-achievement-translation-installer/releases/latest");
+        $"{RepositoryUrl}/releases/latest");
     private static readonly HttpClient SharedClient = CreateClient();
 
     private readonly HttpClient _client;
@@ -41,56 +40,30 @@ public sealed class UpdateService
     public async Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, _endpoint);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
         request.Headers.UserAgent.ParseAdd($"SATLInstaller/{FormatVersion(_currentVersion)}");
 
         using var response = await _client.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
+        if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
+        {
+            throw new HttpRequestException("GitHub 暂时拒绝了更新请求，请稍后重试。", null, response.StatusCode);
+        }
         response.EnsureSuccessStatusCode();
 
-        await using var content = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(content, cancellationToken: cancellationToken);
-        var root = document.RootElement;
-        var tag = root.GetProperty("tag_name").GetString() ?? string.Empty;
-        if (!TryParseVersion(tag, out var latestVersion))
+        var releasePage = response.RequestMessage?.RequestUri;
+        if (!TryGetReleaseVersion(releasePage, out var latestVersion, out var tag))
         {
-            throw new InvalidDataException($"GitHub Release 的版本标签无效：{tag}");
-        }
-
-        var releasePage = TryGetUri(root, "html_url");
-        Uri? installer = null;
-        Uri? portable = null;
-        if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var asset in assets.EnumerateArray())
-            {
-                var name = asset.TryGetProperty("name", out var nameValue)
-                    ? nameValue.GetString() ?? string.Empty
-                    : string.Empty;
-                var download = TryGetUri(asset, "browser_download_url");
-                if (download is null)
-                {
-                    continue;
-                }
-                if (name.Contains("Setup", StringComparison.OrdinalIgnoreCase)
-                    && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                {
-                    installer = download;
-                }
-                else if (name.Contains("Portable", StringComparison.OrdinalIgnoreCase)
-                         && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                {
-                    portable = download;
-                }
-            }
+            throw new InvalidDataException("GitHub 最新发布页没有返回有效的版本标签。");
         }
 
         var isAvailable = latestVersion > Normalize(_currentVersion);
         var currentText = FormatVersion(_currentVersion);
         var latestText = FormatVersion(latestVersion);
+        releasePage ??= new Uri($"{RepositoryUrl}/releases/tag/{tag}");
+        var installer = new Uri($"{RepositoryUrl}/releases/download/{tag}/SATLInstaller-Setup-v{latestText}.exe");
+        var portable = new Uri($"{RepositoryUrl}/releases/download/{tag}/SATLInstaller-Portable-v{latestText}.zip");
         var message = isAvailable
             ? $"发现新版本 v{latestText}。请打开 GitHub Release 选择安装版或便携版。"
             : $"当前已是最新版本 v{currentText}。";
@@ -109,12 +82,27 @@ public sealed class UpdateService
         Timeout = TimeSpan.FromSeconds(15),
     };
 
-    private static Uri? TryGetUri(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var value)
-        && value.ValueKind == JsonValueKind.String
-        && Uri.TryCreate(value.GetString(), UriKind.Absolute, out var uri)
-            ? uri
-            : null;
+    private static bool TryGetReleaseVersion(Uri? uri, out Version version, out string tag)
+    {
+        version = new Version(0, 0, 0);
+        tag = string.Empty;
+        if (uri is null)
+        {
+            return false;
+        }
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        for (var index = 0; index + 1 < segments.Length; index++)
+        {
+            if (!segments[index].Equals("tag", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            tag = Uri.UnescapeDataString(segments[index + 1]);
+            return TryParseVersion(tag, out version);
+        }
+        return false;
+    }
 
     private static bool TryParseVersion(string value, out Version version)
     {

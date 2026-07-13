@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>satl</AssemblyName>
+    <RootNamespace>Satl.CliLauncher</RootNamespace>
+    <Product>Steam Achievement Translation Installer CLI</Product>
+    <AssemblyTitle>SATL 命令行核心</AssemblyTitle>
+    <Description>Steam 成就翻译安装器命令行入口</Description>
+    <ApplicationIcon>$(MSBuildProjectDirectory)\..\Satl.Gui\Assets\AppIcon.ico</ApplicationIcon>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+</Project>

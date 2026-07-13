@@ -124,35 +124,30 @@ public sealed class ProtocolTests
     }
 
     [Fact]
-    public async Task UpdateServiceMapsLatestGithubReleaseAndAssets()
+    public async Task UpdateServiceMapsLatestReleaseRedirectWithoutGithubApi()
     {
-        using var client = new HttpClient(new StubHttpHandler("""
-            {
-              "tag_name": "v0.3.0",
-              "html_url": "https://github.com/GaBoron/steam-achievement-translation-installer/releases/tag/v0.3.0",
-              "assets": [
-                {"name":"SATLInstaller-Setup-v0.3.0.exe","browser_download_url":"https://example.invalid/setup.exe"},
-                {"name":"SATLInstaller-Portable-v0.3.0.zip","browser_download_url":"https://example.invalid/portable.zip"}
-              ]
-            }
-            """));
+        using var client = new HttpClient(new StubHttpHandler(
+            new Uri("https://github.com/GaBoron/steam-achievement-translation-installer/releases/tag/v0.3.0")));
         var service = new UpdateService(client, new Version(0, 2, 0), new Uri("https://example.invalid/latest"));
 
         var result = await service.CheckAsync();
 
         Assert.True(result.IsUpdateAvailable);
         Assert.Equal("0.3.0", result.LatestVersion);
-        Assert.Equal("https://example.invalid/setup.exe", result.InstallerDownload?.AbsoluteUri);
-        Assert.Equal("https://example.invalid/portable.zip", result.PortableDownload?.AbsoluteUri);
+        Assert.Equal(
+            "https://github.com/GaBoron/steam-achievement-translation-installer/releases/download/v0.3.0/SATLInstaller-Setup-v0.3.0.exe",
+            result.InstallerDownload?.AbsoluteUri);
+        Assert.Equal(
+            "https://github.com/GaBoron/steam-achievement-translation-installer/releases/download/v0.3.0/SATLInstaller-Portable-v0.3.0.zip",
+            result.PortableDownload?.AbsoluteUri);
         Assert.Contains("发现新版本", result.Message);
     }
 
     [Fact]
     public async Task UpdateServiceReportsCurrentVersion()
     {
-        using var client = new HttpClient(new StubHttpHandler("""
-            {"tag_name":"v0.2.0","html_url":"https://example.invalid/release","assets":[]}
-            """));
+        using var client = new HttpClient(new StubHttpHandler(
+            new Uri("https://github.com/GaBoron/steam-achievement-translation-installer/releases/tag/v0.2.0")));
         var service = new UpdateService(client, new Version(0, 2, 0), new Uri("https://example.invalid/latest"));
 
         var result = await service.CheckAsync();
@@ -162,14 +157,30 @@ public sealed class ProtocolTests
         Assert.Contains("最新版本", result.Message);
     }
 
-    private sealed class StubHttpHandler(string response) : HttpMessageHandler
+    [Fact]
+    public async Task UpdateServiceMapsForbiddenResponseToReadableMessage()
+    {
+        using var client = new HttpClient(new StubHttpHandler(
+            new Uri("https://example.invalid/latest"),
+            System.Net.HttpStatusCode.Forbidden));
+        var service = new UpdateService(client, new Version(0, 2, 0), new Uri("https://example.invalid/latest"));
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => service.CheckAsync());
+
+        Assert.Contains("请稍后重试", exception.Message);
+    }
+
+    private sealed class StubHttpHandler(
+        Uri responseUri,
+        System.Net.HttpStatusCode statusCode = System.Net.HttpStatusCode.OK) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken) => Task.FromResult(new HttpResponseMessage
         {
-            StatusCode = System.Net.HttpStatusCode.OK,
-            Content = new StringContent(response),
+            StatusCode = statusCode,
+            RequestMessage = new HttpRequestMessage(HttpMethod.Get, responseUri),
+            Content = new StringContent(string.Empty),
         });
     }
 }

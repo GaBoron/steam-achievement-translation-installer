@@ -12,6 +12,11 @@ official Simplified Chinese message file from the Inno Setup source repository.
 Inno Setup and its message files remain subject to the Inno Setup license and
 their respective copyright notices.
 
+Windows release packages include the official CPython 3.13 embeddable runtime.
+Python is distributed under the Python Software Foundation License; the
+runtime's complete `LICENSE.txt` is included beside its binaries in
+`_satl_runtime`.
+
 ## Translation data
 
 This program downloads community-maintained achievement schema files from

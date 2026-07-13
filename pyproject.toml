@@ -22,7 +22,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3", "pyinstaller>=6.11"]
+dev = ["pytest>=8.3"]
 
 [project.scripts]
 satl = "satl.cli:main"
