@@ -92,6 +92,57 @@
                 </StackPanel>
             </Border>
 
+            <TextBlock Text="日志" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                <StackPanel>
+                    <Grid Style="{StaticResource SettingsRowStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Spacing="3">
+                            <TextBlock Text="记录运行日志" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="记录扫描、安装、恢复、缓存和异常信息，不记录成就文件内容。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ToggleSwitch x:Name="LoggingSwitch" Grid.Column="1" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="LoggingSwitch_Toggled" />
+                    </Grid>
+                    <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+                    <Grid Style="{StaticResource SettingsRowStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Spacing="3">
+                            <TextBlock Text="详细程度" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="标准模式记录操作结果；详细模式额外记录 CLI 事件。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ComboBox x:Name="LogLevelBox" Grid.Column="1" Width="160" VerticalAlignment="Center" SelectedIndex="0" SelectionChanged="LogSettings_SelectionChanged">
+                            <ComboBoxItem Content="标准" Tag="standard" />
+                            <ComboBoxItem Content="详细" Tag="detailed" />
+                        </ComboBox>
+                    </Grid>
+                    <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+                    <Grid Style="{StaticResource SettingsRowStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Spacing="3">
+                            <TextBlock Text="保留时间" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="启动和设置变更时自动清理超过期限的日志。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                            <ComboBox x:Name="LogRetentionBox" Width="120" SelectedIndex="1" SelectionChanged="LogSettings_SelectionChanged">
+                                <ComboBoxItem Content="7 天" Tag="7" />
+                                <ComboBoxItem Content="30 天" Tag="30" />
+                                <ComboBoxItem Content="90 天" Tag="90" />
+                            </ComboBox>
+                            <Button Content="打开目录" Click="OpenLogs_Click" AutomationProperties.Name="在文件资源管理器中打开日志目录" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
             <TextBlock Text="维护" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
                 <Grid Style="{StaticResource SettingsRowStyle}">

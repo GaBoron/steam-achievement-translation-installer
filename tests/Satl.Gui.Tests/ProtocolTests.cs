@@ -42,15 +42,16 @@ public sealed class ProtocolTests
     public void GameItemMapsVariantsAndState()
     {
         using var document = JsonDocument.Parse(
-            "{\"app_id\":\"123\",\"game_name\":\"Game\",\"catalog_status\":\"current\",\"installed_state\":\"modified\",\"discovery\":[\"installed\"],\"variants\":[{\"variant_id\":\"default\",\"primary\":true,\"note_zh\":\"原版\"}]}"
+            "{\"app_id\":\"123\",\"game_name\":\"Game\",\"catalog_status\":\"current\",\"installed_state\":\"modified\",\"installed_variant_id\":\"with-unlock-conditions\",\"discovery\":[\"installed\"],\"variants\":[{\"variant_id\":\"default\",\"primary\":true,\"note_zh\":\"原版\"},{\"variant_id\":\"with-unlock-conditions\",\"primary\":false,\"note_zh\":\"含解锁条件\"}]}"
         );
 
         var item = GameItem.FromPayload(document.RootElement);
 
         Assert.Equal("123", item.AppId);
         Assert.True(item.IsModified);
-        Assert.Equal("default", item.SelectedVariant?.VariantId);
-        Assert.Contains("原版", item.SelectedVariant?.DisplayName);
+        Assert.Equal("with-unlock-conditions", item.SelectedVariant?.VariantId);
+        Assert.Contains("含解锁条件", item.SelectedVariant?.DisplayName);
+        Assert.Contains("with-unlock-conditions · 含解锁条件", item.InstalledVersionText);
     }
 
     [Fact]
@@ -61,13 +62,55 @@ public sealed class ProtocolTests
         try
         {
             var service = new SettingsService(path);
-            await service.SaveAsync(new GuiSettings { Offline = true, Theme = "dark", SteamDirectory = "C:\\Steam" });
+            await service.SaveAsync(new GuiSettings
+            {
+                Offline = true,
+                Theme = "dark",
+                SteamDirectory = "C:\\Steam",
+                LoggingEnabled = false,
+                LogLevel = "detailed",
+                LogRetentionDays = 90,
+            });
 
             var loaded = await service.LoadAsync();
 
             Assert.True(loaded.Offline);
             Assert.Equal("dark", loaded.Theme);
             Assert.Equal("C:\\Steam", loaded.SteamDirectory);
+            Assert.False(loaded.LoggingEnabled);
+            Assert.Equal("detailed", loaded.LogLevel);
+            Assert.Equal(90, loaded.LogRetentionDays);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task LogServiceWritesFiltersAndClearsLogs()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"satl-log-test-{Guid.NewGuid():N}");
+        try
+        {
+            var service = new LogService(root);
+            service.Configure(enabled: true, level: "detailed", retentionDays: 30);
+            await service.WriteAsync("信息", "测试", "标准记录");
+            await service.WriteAsync("详细", "测试", "详细记录", detailed: true);
+
+            var content = await service.ReadRecentAsync();
+
+            Assert.Contains("标准记录", content);
+            Assert.Contains("详细记录", content);
+            service.Configure(enabled: false, level: "detailed", retentionDays: 30);
+            await service.WriteAsync("信息", "测试", "不应写入");
+            Assert.DoesNotContain("不应写入", await service.ReadRecentAsync());
+
+            await service.ClearAsync();
+            Assert.Equal(string.Empty, await service.ReadRecentAsync());
         }
         finally
         {

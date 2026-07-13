@@ -67,6 +67,7 @@ def test_scan_json_has_stable_fields(tmp_path: Path, capsys: pytest.CaptureFixtu
         "catalog_status",
         "variants",
         "installed_state",
+        "installed_variant_id",
         "action",
         "error",
     }
@@ -229,6 +230,7 @@ def test_install_and_status_offline(tmp_path: Path, monkeypatch, capsys) -> None
     assert result == 0
     output = json.loads(capsys.readouterr().out)
     assert output[0]["installed_state"] == "installed"
+    assert output[0]["installed_variant_id"] == "default"
 
 
 def test_install_and_restore_jsonl_emit_item_results(tmp_path: Path, monkeypatch, capsys) -> None:

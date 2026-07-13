@@ -77,6 +77,8 @@ public sealed class MainViewModel : ObservableObject
     {
         Settings = await _settingsService.LoadAsync();
         OnPropertyChanged(nameof(Settings));
+        App.Logs.Configure(Settings.LoggingEnabled, Settings.LogLevel, Settings.LogRetentionDays);
+        await App.Logs.WriteAsync("信息", "应用", "设置已加载，开始初始化。");
         ApplyTheme();
         await ScanAsync();
     }
@@ -220,6 +222,7 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(Settings));
         OnPropertyChanged(nameof(CurrentSteamDirectory));
         OnPropertyChanged(nameof(CurrentDataDirectory));
+        App.Logs.Configure(settings.LoggingEnabled, settings.LogLevel, settings.LogRetentionDays);
         ApplyTheme();
     }
 
@@ -228,6 +231,10 @@ public sealed class MainViewModel : ObservableObject
         InfoMessage = message;
         InfoSeverity = severity;
         IsInfoOpen = true;
+        if (severity is InfoBarSeverity.Error or InfoBarSeverity.Warning)
+        {
+            _ = App.Logs.WriteAsync(severity == InfoBarSeverity.Error ? "错误" : "警告", "界面", message);
+        }
     }
 
     private async Task<CliRunResult?> RunPreviewAsync(IReadOnlyList<string> arguments, string status)
@@ -306,6 +313,7 @@ public sealed class MainViewModel : ObservableObject
             if (scanned is not null)
             {
                 scanned.InstalledState = managed.InstalledState;
+                scanned.InstalledVariantId = managed.InstalledVariantId;
             }
         }
     }
@@ -313,8 +321,11 @@ public sealed class MainViewModel : ObservableObject
     private async Task<CliRunResult> RunCliAsync(IReadOnlyList<string> arguments, string status)
     {
         StatusMessage = status;
-        return await _cli.RunAsync(arguments, satlEvent =>
+        var operation = arguments.FirstOrDefault() ?? "unknown";
+        await App.Logs.WriteAsync("信息", operation, $"开始：{status}");
+        var result = await _cli.RunAsync(arguments, satlEvent =>
         {
+            _ = App.Logs.WriteAsync("详细", satlEvent.Operation, DescribeEvent(satlEvent), detailed: true);
             if (satlEvent.Event == "item-started" && satlEvent.Payload.TryGetProperty("app_id", out var appId))
             {
                 App.DispatcherQueue.TryEnqueue(() => StatusMessage = $"正在处理 App ID {appId.GetString()}…");
@@ -324,6 +335,12 @@ public sealed class MainViewModel : ObservableObject
                 App.DispatcherQueue.TryEnqueue(() => ShowInfo(warning.GetString() ?? "正在使用本地缓存。"));
             }
         });
+        await App.Logs.WriteAsync(
+            result.IsSuccess ? "信息" : "错误",
+            operation,
+            $"完成：退出码 {result.ExitCode}，事件 {result.Events.Count} 个。" +
+            (string.IsNullOrWhiteSpace(result.StandardError) ? string.Empty : $" 标准错误：{result.StandardError}"));
+        return result;
     }
 
     private List<string> BuildInstallArguments(IReadOnlyList<GameItem> selected, bool dryRun, bool yes)
@@ -421,6 +438,26 @@ public sealed class MainViewModel : ObservableObject
             "dark" => ElementTheme.Dark,
             _ => ElementTheme.Default,
         };
+        if (App.Window is MainWindow mainWindow)
+        {
+            var effectiveTheme = root.RequestedTheme == ElementTheme.Default ? root.ActualTheme : root.RequestedTheme;
+            mainWindow.ApplyTitleBarTheme(effectiveTheme);
+            App.DispatcherQueue.TryEnqueue(() => mainWindow.ApplyTitleBarTheme(root.ActualTheme));
+        }
+    }
+
+    private static string DescribeEvent(SatlEvent satlEvent)
+    {
+        var appId = satlEvent.Payload.TryGetProperty("app_id", out var appIdValue)
+            ? $"，App ID {appIdValue.GetString()}"
+            : string.Empty;
+        var variant = satlEvent.Payload.TryGetProperty("variant_id", out var variantValue)
+            ? $"，版本 {variantValue.GetString()}"
+            : string.Empty;
+        var message = satlEvent.Payload.TryGetProperty("message", out var messageValue)
+            ? $"：{messageValue.GetString()}"
+            : string.Empty;
+        return $"事件 {satlEvent.Event}{appId}{variant}{message}";
     }
 
     private void ShowResultError(CliRunResult result) => ShowInfo(ResultError(result), InfoBarSeverity.Error);

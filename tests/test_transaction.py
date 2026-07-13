@@ -43,10 +43,12 @@ def test_install_and_restore_existing_original(tmp_path: Path) -> None:
     assert transaction["previous_exists"] is True
     assert (data / transaction["snapshot"]).read_bytes() == b"original"
     assert manager.status("123") == "installed"
+    assert manager.installed_variant_id("123") == "default"
 
     manager.restore("123", target)
     assert target.read_bytes() == b"original"
     assert manager.status("123") == "restored"
+    assert manager.installed_variant_id("123") is None
 
 
 def test_restore_deletes_file_when_no_original_existed(tmp_path: Path) -> None:
@@ -70,10 +72,12 @@ def test_repeated_installs_preserve_history_and_restore_lifo(tmp_path: Path) -> 
     manager.install("123", target, first, variant_for("123", b"first"))
     manager.install("123", target, second, variant_for("123", b"second", "beta"))
     assert len(manager.store.transactions("123")) == 2
+    assert manager.installed_variant_id("123") == "beta"
 
     manager.restore("123", target)
     assert target.read_bytes() == b"first"
     assert manager.status("123") == "installed"
+    assert manager.installed_variant_id("123") == "default"
     manager.restore("123", target)
     assert target.read_bytes() == b"original"
     assert manager.status("123") == "restored"

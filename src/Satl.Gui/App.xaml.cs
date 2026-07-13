@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Satl_Gui.Services;
 using Satl_Gui.ViewModels;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -29,6 +30,7 @@ public partial class App : Application
     /// </summary>
     public static Microsoft.UI.Dispatching.DispatcherQueue DispatcherQueue { get; private set; } = null!;
     public static MainViewModel ViewModel { get; } = new();
+    public static LogService Logs { get; } = new();
 
     /// <summary>
     /// The native window handle (HWND). Use for file pickers,
@@ -76,6 +78,7 @@ public partial class App : Application
 
     private static void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
+        _ = Logs.WriteAsync("错误", "应用", e.Exception.ToString());
         LogStartupException(e.Exception);
     }
 

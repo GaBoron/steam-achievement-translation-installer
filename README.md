@@ -40,9 +40,10 @@ SHA-256 文件。
 
 Windows 11 风格界面覆盖完整工作流：
 
-- “游戏”页扫描本地 Steam 数据、搜索游戏、选择翻译版本并批量安装。
-- “已管理”页查看 SATL 安装状态，执行普通恢复；目标被修改时可明确选择强制恢复并先归档当前文件。
-- “设置”页可覆盖 Steam/数据目录、切换离线模式和主题，并刷新翻译目录缓存。
+- “游戏”页扫描本地 Steam 数据、搜索游戏、显示实际安装版本、选择翻译版本并批量安装。
+- “已管理”页查看 SATL 安装状态和安装版本，执行普通恢复；目标被修改时可明确选择强制恢复并先归档当前文件。
+- “日志”页筛选和查看最近的操作记录，并可打开日志目录或确认后清理日志。
+- “设置”页可覆盖 Steam/数据目录、切换离线模式和主题，配置日志详细程度与保留时间，并刷新翻译目录缓存。
 
 GUI 不会绕过 CLI 的安全检查。安装与恢复仍由 `satl.exe` 执行，Steam 正在运行时仍会拒绝写入。
 
@@ -134,6 +135,8 @@ Steam 自动检测失败时，各相关命令均支持 `--steam-dir`。测试或
 - `cache/schemas/<sha256>.bin`：按内容哈希保存的 schema。
 - `backups/<app-id>/<transaction-id>/`：安装和强制恢复快照。
 - `state.json`：version 1 的原子事务状态。
+- `gui-settings.json`：图形界面设置。
+- `logs/satl-gui-<日期>.log`：按日记录的图形界面运行日志。
 
 ## JSON 输出
 
@@ -147,6 +150,7 @@ Steam 自动检测失败时，各相关命令均支持 `--steam-dir`。测试或
   "catalog_status": "current",
   "variants": [],
   "installed_state": "unmanaged",
+  "installed_variant_id": null,
   "action": "available",
   "error": null
 }
@@ -187,6 +191,7 @@ python -m compileall -q src tests scripts
 python -m pytest -q
 python scripts/offline_smoke.py
 dotnet test tests/Satl.Gui.Tests/Satl.Gui.Tests.csproj -c Release -p:Platform=x64
+powershell -ExecutionPolicy Bypass -File scripts/generate_app_icon.ps1
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 

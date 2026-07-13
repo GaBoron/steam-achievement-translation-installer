@@ -118,7 +118,13 @@ def _variant_json(variant: SchemaVariant) -> dict[str, Any]:
     }
 
 
-def _record(entry: CatalogEntry, discovery: Sequence[str], state: str, action: str) -> dict[str, Any]:
+def _record(
+    entry: CatalogEntry,
+    discovery: Sequence[str],
+    state: str,
+    action: str,
+    installed_variant_id: str | None = None,
+) -> dict[str, Any]:
     return {
         "app_id": entry.app_id,
         "game_name": entry.game_name,
@@ -126,6 +132,7 @@ def _record(entry: CatalogEntry, discovery: Sequence[str], state: str, action: s
         "catalog_status": entry.status,
         "variants": [_variant_json(variant) for variant in entry.variants],
         "installed_state": state,
+        "installed_variant_id": installed_variant_id,
         "action": action,
         "error": None,
     }
@@ -178,6 +185,7 @@ def command_scan(args: argparse.Namespace) -> int:
             sorted(discovery.discovery),
             manager.status(app_id),
             "available",
+            manager.installed_variant_id(app_id),
         )
         for app_id, discovery in sorted(discovered.items(), key=lambda item: int(item[0]))
         if app_id in catalog.entries
@@ -377,7 +385,13 @@ def command_status(args: argparse.Namespace) -> int:
     for app_id in app_ids:
         entry = catalog.entries.get(app_id) if catalog else None
         if entry:
-            record = _record(entry, [], manager.status(app_id), "none")
+            record = _record(
+                entry,
+                [],
+                manager.status(app_id),
+                "none",
+                manager.installed_variant_id(app_id),
+            )
         else:
             record = {
                 "app_id": app_id,
@@ -386,6 +400,7 @@ def command_status(args: argparse.Namespace) -> int:
                 "catalog_status": "unknown",
                 "variants": [],
                 "installed_state": manager.status(app_id),
+                "installed_variant_id": manager.installed_variant_id(app_id),
                 "action": "none",
                 "error": None,
             }

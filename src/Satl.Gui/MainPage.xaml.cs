@@ -34,6 +34,7 @@ public sealed partial class MainPage : Page
         var destination = tag switch
         {
             "managed" => typeof(ManagedPage),
+            "logs" => typeof(LogsPage),
             "settings" => typeof(SettingsPage),
             _ => typeof(GamesPage),
         };

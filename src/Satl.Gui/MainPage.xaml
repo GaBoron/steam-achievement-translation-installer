@@ -24,6 +24,9 @@
             <NavigationViewItem Content="已管理" Tag="managed">
                 <NavigationViewItem.Icon><SymbolIcon Symbol="Save" /></NavigationViewItem.Icon>
             </NavigationViewItem>
+            <NavigationViewItem Content="日志" Tag="logs">
+                <NavigationViewItem.Icon><SymbolIcon Symbol="Document" /></NavigationViewItem.Icon>
+            </NavigationViewItem>
         </NavigationView.MenuItems>
         <NavigationView.FooterMenuItems>
             <NavigationViewItem Content="设置" Tag="settings">

@@ -18,6 +18,7 @@ public sealed class GameItem : ObservableObject
     private bool _isSelected;
     private SchemaVariantOption? _selectedVariant;
     private string _installedState = "unmanaged";
+    private string _installedVariantId = string.Empty;
 
     public required string AppId { get; init; }
     public required string GameName { get; init; }
@@ -46,6 +47,19 @@ public sealed class GameItem : ObservableObject
             {
                 OnPropertyChanged(nameof(StateText));
                 OnPropertyChanged(nameof(IsModified));
+                OnPropertyChanged(nameof(InstalledVersionText));
+            }
+        }
+    }
+
+    public string InstalledVariantId
+    {
+        get => _installedVariantId;
+        set
+        {
+            if (SetProperty(ref _installedVariantId, value))
+            {
+                OnPropertyChanged(nameof(InstalledVersionText));
             }
         }
     }
@@ -61,6 +75,18 @@ public sealed class GameItem : ObservableObject
     };
 
     public bool IsModified => InstalledState == "modified";
+    public string InstalledVersionText
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(InstalledVariantId) || InstalledState is "unmanaged" or "restored")
+            {
+                return "已安装版本：无";
+            }
+            var variant = Variants.FirstOrDefault(item => item.VariantId == InstalledVariantId);
+            return $"已安装版本：{variant?.DisplayName ?? InstalledVariantId}";
+        }
+    }
     public bool IsCurrent => CatalogStatus == "current";
     public string CatalogText => IsCurrent ? "当前版本" : "可能已过期";
     public string Subtitle => $"App ID {AppId}" + (string.IsNullOrWhiteSpace(DiscoveryText) ? string.Empty : $" · {DiscoveryText}");
@@ -76,6 +102,7 @@ public sealed class GameItem : ObservableObject
                 ? string.Join(" / ", discovery.EnumerateArray().Select(source => source.GetString()).Where(source => !string.IsNullOrWhiteSpace(source)))
                 : string.Empty,
             InstalledState = GetString(payload, "installed_state", "unmanaged"),
+            InstalledVariantId = GetString(payload, "installed_variant_id", string.Empty),
         };
 
         if (payload.TryGetProperty("variants", out var variants) && variants.ValueKind == JsonValueKind.Array)
@@ -91,7 +118,9 @@ public sealed class GameItem : ObservableObject
             }
         }
 
-        item.SelectedVariant = item.Variants.FirstOrDefault(variant => variant.Primary) ?? item.Variants.FirstOrDefault();
+        item.SelectedVariant = item.Variants.FirstOrDefault(variant => variant.VariantId == item.InstalledVariantId)
+            ?? item.Variants.FirstOrDefault(variant => variant.Primary)
+            ?? item.Variants.FirstOrDefault();
         return item;
     }
 

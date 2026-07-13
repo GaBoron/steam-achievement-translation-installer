@@ -197,6 +197,13 @@ class TransactionManager:
             return "unreadable"
         return "installed" if actual == transaction.get("installed_sha256") else "modified"
 
+    def installed_variant_id(self, app_id: str) -> str | None:
+        transaction = self.store.active_transaction(app_id)
+        if transaction is None:
+            return None
+        variant_id = transaction.get("variant_id")
+        return variant_id if isinstance(variant_id, str) and variant_id else None
+
     def _relative(self, path: Path) -> str:
         resolved = path.resolve()
         try:
