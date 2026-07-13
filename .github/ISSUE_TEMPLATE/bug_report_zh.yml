@@ -1,0 +1,108 @@
+name: Bug 报告
+description: 报告可稳定复现的软件错误，帮助我们定位并修复问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你报告问题。提交前请先确认正在使用最新版本，并尽量完整填写以下信息。
+
+        请勿上传包含 Steam 登录凭据、访问令牌或其他隐私信息的日志与截图。
+
+  - type: input
+    id: app-version
+    attributes:
+      label: 软件版本
+      description: 可在应用的“设置”页面或下载文件名中查看。
+      placeholder: 例如：v0.2.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: 使用方式
+      description: 请选择出现问题时使用的版本。
+      options:
+        - 图形界面版（安装程序）
+        - 图形界面版（便携版）
+        - 命令行版
+        - 从源代码运行
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows 版本
+      description: 请填写 Windows 版本和系统内部版本号（可运行 `winver` 查看）。
+      placeholder: 例如：Windows 11 24H2，内部版本 26100
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-description
+    attributes:
+      label: 问题描述
+      description: 请清楚说明发生了什么，以及问题影响了哪些游戏或功能。
+      placeholder: 描述你观察到的异常现象。
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: 复现步骤
+      description: 请提供能够稳定触发问题的最简步骤。
+      placeholder: |
+        1. 打开……
+        2. 选择……
+        3. 点击……
+        4. 出现……
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: 预期行为
+      description: 请说明你认为软件应当如何表现。
+      placeholder: 描述正常情况下应出现的结果。
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或错误信息
+      description: 请粘贴相关日志或完整错误信息；提交前请移除个人信息和敏感内容。
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图或录屏
+      description: 如有需要，可将图片或录屏直接拖到这里上传。
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 补充信息
+      description: 可填写游戏名称、Steam App ID、翻译版本，以及近期是否修改过 Steam 库目录或相关文件。
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已确认正在使用最新版本，并搜索过现有 Issue，没有发现相同问题。
+          required: true
+        - label: 我已移除日志和截图中的账号、路径、令牌等敏感信息。
+          required: true
