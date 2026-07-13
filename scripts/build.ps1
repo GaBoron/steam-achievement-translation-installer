@@ -4,6 +4,7 @@ $DistRoot = Join-Path $ProjectRoot "dist"
 $CliRoot = Join-Path $DistRoot "satl"
 $PackageRoot = Join-Path $DistRoot "satl-win-x64"
 $GuiPublishRoot = Join-Path $DistRoot "gui-win-x64"
+$GuiBuildRoot = Join-Path $ProjectRoot "build\gui-publish-intermediate"
 $Archive = Join-Path $DistRoot "satl-win-x64.zip"
 $VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 $Python = if (Test-Path $VenvPython) { $VenvPython } else { "python" }
@@ -20,6 +21,7 @@ Assert-WithinProject $DistRoot
 Assert-WithinProject $CliRoot
 Assert-WithinProject $PackageRoot
 Assert-WithinProject $GuiPublishRoot
+Assert-WithinProject $GuiBuildRoot
 Assert-WithinProject $Archive
 
 Push-Location $ProjectRoot
@@ -33,12 +35,17 @@ try {
     if (Test-Path $GuiPublishRoot) {
         Remove-Item -LiteralPath $GuiPublishRoot -Recurse -Force
     }
+    if (Test-Path $GuiBuildRoot) {
+        Remove-Item -LiteralPath $GuiBuildRoot -Recurse -Force
+    }
     New-Item -ItemType Directory -Path $GuiPublishRoot | Out-Null
+    New-Item -ItemType Directory -Path $GuiBuildRoot | Out-Null
 
     & dotnet publish src/Satl.Gui/Satl.Gui.csproj `
         -c Release `
         -r win-x64 `
         -p:Platform=x64 `
+        -p:OutDir="$GuiBuildRoot\" `
         --self-contained true `
         -o $GuiPublishRoot
     if ($LASTEXITCODE -ne 0) {

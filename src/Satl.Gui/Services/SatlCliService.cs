@@ -33,6 +33,8 @@ public sealed class SatlCliService
         {
             startInfo.Environment[environment.Key] = environment.Value;
         }
+        startInfo.Environment["PYTHONUTF8"] = "1";
+        startInfo.Environment["PYTHONIOENCODING"] = "utf-8";
 
         using var process = new Process { StartInfo = startInfo };
         if (!process.Start())
@@ -113,7 +115,6 @@ public sealed class SatlCliService
                     ["-m", "satl"],
                     new Dictionary<string, string>
                     {
-                        ["PYTHONUTF8"] = "1",
                         ["PYTHONPATH"] = Path.Combine(directory.FullName, "src"),
                     });
             }

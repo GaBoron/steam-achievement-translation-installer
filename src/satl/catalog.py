@@ -167,13 +167,17 @@ class CatalogRepository:
         data_dir: Path,
         *,
         opener: Callable[..., Any] | None = None,
+        direct_opener: Callable[..., Any] | None = None,
         catalog_urls: tuple[str, ...] = CATALOG_URLS,
         roots: tuple[str, ...] = (RAW_ROOT, JSDELIVR_ROOT),
     ) -> None:
         self.data_dir = Path(data_dir)
         self.catalog_urls = catalog_urls
         self.roots = roots
-        self._opener = opener or urllib.request.urlopen
+        self._opener = opener
+        self._direct_opener = direct_opener or urllib.request.build_opener(
+            urllib.request.ProxyHandler({})
+        ).open
 
     @property
     def catalog_cache(self) -> Path:
@@ -181,7 +185,19 @@ class CatalogRepository:
 
     def _open(self, url: str, timeout: float):
         request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        return self._opener(request, timeout=timeout)
+        if self._opener is not None:
+            return self._opener(request, timeout=timeout)
+        try:
+            return urllib.request.urlopen(request, timeout=timeout)
+        except (OSError, urllib.error.URLError, TimeoutError) as proxy_error:
+            if not urllib.request.getproxies():
+                raise
+            try:
+                return self._direct_opener(request, timeout=timeout)
+            except (OSError, urllib.error.URLError, TimeoutError) as direct_error:
+                raise urllib.error.URLError(
+                    f"代理连接失败：{proxy_error}；无代理直连失败：{direct_error}"
+                ) from direct_error
 
     def _fetch_catalog(self, *, persist: bool = True) -> Catalog:
         errors: list[str] = []

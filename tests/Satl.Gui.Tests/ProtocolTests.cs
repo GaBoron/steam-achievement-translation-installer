@@ -28,6 +28,17 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public void ParseEventPreservesCjkText()
+    {
+        var parsed = SatlCliService.ParseEvent(
+            "{\"protocol_version\":1,\"operation\":\"scan\",\"event\":\"item-succeeded\",\"payload\":{\"game_name\":\"以撒的结合：重生\",\"note_zh\":\"原版\"}}"
+        );
+
+        Assert.Equal("以撒的结合：重生", parsed.Payload.GetProperty("game_name").GetString());
+        Assert.Equal("原版", parsed.Payload.GetProperty("note_zh").GetString());
+    }
+
+    [Fact]
     public void GameItemMapsVariantsAndState()
     {
         using var document = JsonDocument.Parse(

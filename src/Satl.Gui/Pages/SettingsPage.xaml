@@ -3,35 +3,118 @@
     x:Class="Satl_Gui.Pages.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Page.Resources>
+        <Style x:Key="SettingsRowStyle" TargetType="Grid">
+            <Setter Property="MinHeight" Value="88" />
+            <Setter Property="Padding" Value="20,16" />
+            <Setter Property="ColumnSpacing" Value="32" />
+        </Style>
+    </Page.Resources>
     <ScrollViewer>
-        <StackPanel Padding="32,24,32,32" Spacing="20" MaxWidth="880" HorizontalAlignment="Left">
+        <StackPanel Padding="32,24,32,32" Spacing="12" MaxWidth="960" HorizontalAlignment="Stretch">
             <StackPanel Spacing="4">
                 <TextBlock Text="设置" Style="{StaticResource TitleTextBlockStyle}" />
-                <TextBlock Text="路径留空时使用 SATL 自动检测和默认数据目录。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="管理安装器使用的目录、连接方式和外观。更改会立即生效。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </StackPanel>
-            <Border Padding="20" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
-                <StackPanel Spacing="16">
-                    <TextBox x:Name="SteamDirectoryBox" Header="Steam 目录" PlaceholderText="自动检测" AutomationProperties.Name="Steam 目录" />
-                    <TextBox x:Name="DataDirectoryBox" Header="SATL 数据目录" PlaceholderText="使用 %LOCALAPPDATA% 默认目录" AutomationProperties.Name="SATL 数据目录" />
-                    <ToggleSwitch x:Name="OfflineSwitch" Header="离线模式" OffContent="允许联网刷新" OnContent="仅使用已验证缓存" />
-                    <ComboBox x:Name="ThemeBox" Header="应用主题" SelectedIndex="0">
-                        <ComboBoxItem Content="跟随系统" Tag="system" />
-                        <ComboBoxItem Content="浅色" Tag="light" />
-                        <ComboBoxItem Content="深色" Tag="dark" />
-                    </ComboBox>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button Content="保存设置" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" />
-                        <Button Content="刷新翻译目录" Click="RefreshCache_Click" />
-                        <Button Content="打开数据目录" Click="OpenData_Click" />
-                    </StackPanel>
+
+            <TextBlock Text="路径" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                <StackPanel>
+                    <Grid Style="{StaticResource SettingsRowStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="400" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Spacing="3">
+                            <TextBlock Text="Steam 目录" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="用于扫描已安装游戏和成就缓存。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8">
+                            <TextBlock x:Name="SteamDirectoryText" TextTrimming="CharacterEllipsis" AutomationProperties.Name="当前 Steam 目录" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                                <Button Content="自动检测" Click="ResetSteamDirectory_Click" />
+                                <Button Content="浏览…" Click="BrowseSteamDirectory_Click" AutomationProperties.Name="选择 Steam 目录" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                    <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+                    <Grid Style="{StaticResource SettingsRowStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="400" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Spacing="3">
+                            <TextBlock Text="SATL 数据目录" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="保存目录缓存、安装状态、备份与恢复归档。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8">
+                            <TextBlock x:Name="DataDirectoryText" TextTrimming="CharacterEllipsis" AutomationProperties.Name="当前 SATL 数据目录" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                                <Button Content="使用默认目录" Click="ResetDataDirectory_Click" />
+                                <Button Content="打开" Click="OpenData_Click" AutomationProperties.Name="在文件资源管理器中打开数据目录" />
+                                <Button Content="浏览…" Click="BrowseDataDirectory_Click" AutomationProperties.Name="选择 SATL 数据目录" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
                 </StackPanel>
             </Border>
-            <Border Padding="20" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Steam 成就翻译安装器" Style="{StaticResource SubtitleTextBlockStyle}" />
-                    <TextBlock Text="版本 0.1.0 Alpha · Windows 10/11 x64" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Text="GUI 只负责展示与确认；安装、校验、备份和恢复继续由 satl 核心执行。" TextWrapping="Wrap" />
+
+            <TextBlock Text="首选项" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                <StackPanel>
+                    <Grid Style="{StaticResource SettingsRowStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Spacing="3">
+                            <TextBlock Text="离线模式" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="启用后仅使用本地已验证缓存，不访问在线目录。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ToggleSwitch x:Name="OfflineSwitch" Grid.Column="1" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="OfflineSwitch_Toggled" />
+                    </Grid>
+                    <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+                    <Grid Style="{StaticResource SettingsRowStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Spacing="3">
+                            <TextBlock Text="应用主题" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="选择跟随 Windows，或固定使用浅色、深色主题。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ComboBox x:Name="ThemeBox" Grid.Column="1" Width="160" VerticalAlignment="Center" SelectedIndex="0" SelectionChanged="ThemeBox_SelectionChanged">
+                            <ComboBoxItem Content="跟随系统" Tag="system" />
+                            <ComboBoxItem Content="浅色" Tag="light" />
+                            <ComboBoxItem Content="深色" Tag="dark" />
+                        </ComboBox>
+                    </Grid>
                 </StackPanel>
+            </Border>
+
+            <TextBlock Text="维护" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                <Grid Style="{StaticResource SettingsRowStyle}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Spacing="3">
+                        <TextBlock Text="翻译目录缓存" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="从数据源重新获取可用翻译和版本信息。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="立即刷新" VerticalAlignment="Center" Click="RefreshCache_Click" />
+                </Grid>
+            </Border>
+
+            <TextBlock Text="关于" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                <Grid Style="{StaticResource SettingsRowStyle}">
+                    <StackPanel VerticalAlignment="Center" Spacing="3">
+                        <TextBlock Text="Steam 成就翻译安装器" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="版本 0.1.0 Alpha · Windows 10/11 x64" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Grid>
             </Border>
         </StackPanel>
     </ScrollViewer>

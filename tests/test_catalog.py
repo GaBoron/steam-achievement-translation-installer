@@ -168,6 +168,40 @@ def test_catalog_uses_valid_cache_when_network_is_unavailable(tmp_path: Path) ->
     assert "123" in catalog.entries
 
 
+def test_catalog_retries_direct_when_configured_proxy_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = json.dumps({"version": 1, "entries": [legacy_entry()]}).encode()
+    calls: list[str] = []
+
+    def proxied_opener(request, timeout):
+        calls.append(f"proxy:{request.full_url}")
+        raise URLError("proxy refused connection")
+
+    def direct_opener(request, timeout):
+        calls.append(f"direct:{request.full_url}")
+        return Response(payload)
+
+    monkeypatch.setattr("satl.catalog.urllib.request.urlopen", proxied_opener)
+    monkeypatch.setattr(
+        "satl.catalog.urllib.request.getproxies",
+        lambda: {"https": "http://127.0.0.1:9"},
+    )
+    repository = CatalogRepository(
+        tmp_path,
+        direct_opener=direct_opener,
+        catalog_urls=("https://catalog.invalid",),
+    )
+
+    catalog = repository.refresh()
+
+    assert "123" in catalog.entries
+    assert calls == [
+        "proxy:https://catalog.invalid",
+        "direct:https://catalog.invalid",
+    ]
+
+
 def test_catalog_falls_back_after_invalid_first_source(tmp_path: Path) -> None:
     payload = json.dumps({"version": 1, "entries": [legacy_entry()]}).encode()
     responses = iter((b"not-json", payload))

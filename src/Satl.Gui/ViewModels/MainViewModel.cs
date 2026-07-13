@@ -17,12 +17,19 @@ public sealed class MainViewModel : ObservableObject
     private bool _isInfoOpen;
     private string _infoMessage = string.Empty;
     private InfoBarSeverity _infoSeverity = InfoBarSeverity.Informational;
+    private string _detectedSteamDirectory = string.Empty;
 
     public ObservableCollection<GameItem> Games { get; } = [];
     public ObservableCollection<GameItem> VisibleGames { get; } = [];
     public ObservableCollection<GameItem> ManagedGames { get; } = [];
     public GuiSettings Settings { get; private set; } = new();
     public string SettingsPath => _settingsService.SettingsPath;
+    public string CurrentSteamDirectory => !string.IsNullOrWhiteSpace(Settings.SteamDirectory)
+        ? Settings.SteamDirectory
+        : string.IsNullOrWhiteSpace(_detectedSteamDirectory) ? "尚未检测到 Steam 目录" : _detectedSteamDirectory;
+    public string CurrentDataDirectory => !string.IsNullOrWhiteSpace(Settings.DataDirectory)
+        ? Settings.DataDirectory
+        : Path.GetDirectoryName(SettingsPath)!;
 
     public string SearchText
     {
@@ -206,13 +213,14 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public async Task SaveSettingsAsync(GuiSettings settings)
+    public async Task UpdateSettingsAsync(GuiSettings settings)
     {
         Settings = settings;
         await _settingsService.SaveAsync(settings);
         OnPropertyChanged(nameof(Settings));
+        OnPropertyChanged(nameof(CurrentSteamDirectory));
+        OnPropertyChanged(nameof(CurrentDataDirectory));
         ApplyTheme();
-        ShowInfo("设置已保存，将在下一次操作时生效。", InfoBarSeverity.Success);
     }
 
     public void ShowInfo(string message, InfoBarSeverity severity = InfoBarSeverity.Informational)
@@ -260,6 +268,15 @@ public sealed class MainViewModel : ObservableObject
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(ResultError(result));
+        }
+
+        var plan = result.Events.FirstOrDefault(item => item.Event == "plan");
+        if (plan is not null
+            && plan.Payload.TryGetProperty("steam_dir", out var steamDirectory)
+            && steamDirectory.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            _detectedSteamDirectory = steamDirectory.GetString() ?? string.Empty;
+            OnPropertyChanged(nameof(CurrentSteamDirectory));
         }
 
         Games.Clear();
