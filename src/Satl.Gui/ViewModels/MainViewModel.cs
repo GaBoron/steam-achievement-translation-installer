@@ -11,6 +11,7 @@ public sealed class MainViewModel : ObservableObject
 {
     private readonly SatlCliService _cli = new();
     private readonly SettingsService _settingsService = new();
+    private readonly UpdateService _updateService = new();
     private string _searchText = string.Empty;
     private bool _isBusy;
     private string _statusMessage = "准备就绪";
@@ -18,6 +19,7 @@ public sealed class MainViewModel : ObservableObject
     private string _infoMessage = string.Empty;
     private InfoBarSeverity _infoSeverity = InfoBarSeverity.Informational;
     private string _detectedSteamDirectory = string.Empty;
+    private Uri? _latestReleasePage;
 
     public ObservableCollection<GameItem> Games { get; } = [];
     public ObservableCollection<GameItem> VisibleGames { get; } = [];
@@ -30,6 +32,11 @@ public sealed class MainViewModel : ObservableObject
     public string CurrentDataDirectory => !string.IsNullOrWhiteSpace(Settings.DataDirectory)
         ? Settings.DataDirectory
         : Path.GetDirectoryName(SettingsPath)!;
+    public Uri? LatestReleasePage
+    {
+        get => _latestReleasePage;
+        private set => SetProperty(ref _latestReleasePage, value);
+    }
 
     public string SearchText
     {
@@ -81,6 +88,10 @@ public sealed class MainViewModel : ObservableObject
         await App.Logs.WriteAsync("信息", "应用", "设置已加载，开始初始化。");
         ApplyTheme();
         await ScanAsync();
+        if (Settings.CheckForUpdatesOnStartup)
+        {
+            await CheckForUpdatesCoreAsync(showCurrentResult: false);
+        }
     }
 
     public async Task ScanAsync()
@@ -207,6 +218,48 @@ public sealed class MainViewModel : ObservableObject
         catch (Exception exception)
         {
             ShowInfo(exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            StatusMessage = "准备就绪";
+            IsBusy = false;
+        }
+    }
+
+    public Task<UpdateCheckResult?> CheckForUpdatesAsync() =>
+        CheckForUpdatesCoreAsync(showCurrentResult: true);
+
+    private async Task<UpdateCheckResult?> CheckForUpdatesCoreAsync(bool showCurrentResult)
+    {
+        if (IsBusy)
+        {
+            return null;
+        }
+        IsBusy = true;
+        IsInfoOpen = false;
+        StatusMessage = "正在检查软件更新…";
+        try
+        {
+            var result = await _updateService.CheckAsync();
+            LatestReleasePage = result.ReleasePage;
+            await App.Logs.WriteAsync("信息", "更新", result.Message);
+            if (result.IsUpdateAvailable || showCurrentResult)
+            {
+                ShowInfo(
+                    result.Message,
+                    result.IsUpdateAvailable ? InfoBarSeverity.Success : InfoBarSeverity.Informational);
+            }
+            return result;
+        }
+        catch (Exception exception)
+        {
+            var message = $"无法检查软件更新：{exception.Message}";
+            await App.Logs.WriteAsync("警告", "更新", message);
+            if (showCurrentResult)
+            {
+                ShowInfo(message, InfoBarSeverity.Warning);
+            }
+            return null;
         }
         finally
         {

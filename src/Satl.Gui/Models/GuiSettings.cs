@@ -9,4 +9,5 @@ public sealed class GuiSettings
     public bool LoggingEnabled { get; set; } = true;
     public string LogLevel { get; set; } = "standard";
     public int LogRetentionDays { get; set; } = 30;
+    public bool CheckForUpdatesOnStartup { get; set; } = true;
 }

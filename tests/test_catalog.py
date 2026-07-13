@@ -7,8 +7,13 @@ from urllib.error import URLError
 
 import pytest
 
-from satl.catalog import CatalogRepository, parse_catalog, verify_schema_file
+from satl import __version__
+from satl.catalog import USER_AGENT, CatalogRepository, parse_catalog, verify_schema_file
 from satl.errors import CatalogError, IntegrityError
+
+
+def test_user_agent_uses_package_version() -> None:
+    assert USER_AGENT.startswith(f"satl/{__version__} ")
 
 
 def legacy_entry(data: bytes = b"default") -> dict[str, object]:

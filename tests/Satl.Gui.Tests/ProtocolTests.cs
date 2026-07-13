@@ -70,6 +70,7 @@ public sealed class ProtocolTests
                 LoggingEnabled = false,
                 LogLevel = "detailed",
                 LogRetentionDays = 90,
+                CheckForUpdatesOnStartup = true,
             });
 
             var loaded = await service.LoadAsync();
@@ -80,6 +81,7 @@ public sealed class ProtocolTests
             Assert.False(loaded.LoggingEnabled);
             Assert.Equal("detailed", loaded.LogLevel);
             Assert.Equal(90, loaded.LogRetentionDays);
+            Assert.True(loaded.CheckForUpdatesOnStartup);
         }
         finally
         {
@@ -119,5 +121,55 @@ public sealed class ProtocolTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public async Task UpdateServiceMapsLatestGithubReleaseAndAssets()
+    {
+        using var client = new HttpClient(new StubHttpHandler("""
+            {
+              "tag_name": "v0.3.0",
+              "html_url": "https://github.com/GaBoron/steam-achievement-translation-installer/releases/tag/v0.3.0",
+              "assets": [
+                {"name":"SATLInstaller-Setup-v0.3.0.exe","browser_download_url":"https://example.invalid/setup.exe"},
+                {"name":"SATLInstaller-Portable-v0.3.0.zip","browser_download_url":"https://example.invalid/portable.zip"}
+              ]
+            }
+            """));
+        var service = new UpdateService(client, new Version(0, 2, 0), new Uri("https://example.invalid/latest"));
+
+        var result = await service.CheckAsync();
+
+        Assert.True(result.IsUpdateAvailable);
+        Assert.Equal("0.3.0", result.LatestVersion);
+        Assert.Equal("https://example.invalid/setup.exe", result.InstallerDownload?.AbsoluteUri);
+        Assert.Equal("https://example.invalid/portable.zip", result.PortableDownload?.AbsoluteUri);
+        Assert.Contains("发现新版本", result.Message);
+    }
+
+    [Fact]
+    public async Task UpdateServiceReportsCurrentVersion()
+    {
+        using var client = new HttpClient(new StubHttpHandler("""
+            {"tag_name":"v0.2.0","html_url":"https://example.invalid/release","assets":[]}
+            """));
+        var service = new UpdateService(client, new Version(0, 2, 0), new Uri("https://example.invalid/latest"));
+
+        var result = await service.CheckAsync();
+
+        Assert.False(result.IsUpdateAvailable);
+        Assert.Equal("0.2.0", result.CurrentVersion);
+        Assert.Contains("最新版本", result.Message);
+    }
+
+    private sealed class StubHttpHandler(string response) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) => Task.FromResult(new HttpResponseMessage
+        {
+            StatusCode = System.Net.HttpStatusCode.OK,
+            Content = new StringContent(response),
+        });
     }
 }

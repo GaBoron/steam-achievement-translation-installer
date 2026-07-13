@@ -60,25 +60,28 @@ public sealed partial class MainWindow : Window
         }
 
         var dark = theme == ElementTheme.Dark;
-        titleBar.BackgroundColor = dark
+        var titleBarBackground = dark
             ? Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32)
             : Microsoft.UI.ColorHelper.FromArgb(255, 243, 243, 243);
-        titleBar.ForegroundColor = dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
-        titleBar.InactiveBackgroundColor = dark
+        var titleBarForeground = dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
+        var titleBarInactiveBackground = dark
             ? Microsoft.UI.ColorHelper.FromArgb(255, 43, 43, 43)
             : Microsoft.UI.ColorHelper.FromArgb(255, 249, 249, 249);
+        titleBar.BackgroundColor = titleBarBackground;
+        titleBar.ForegroundColor = titleBarForeground;
+        titleBar.InactiveBackgroundColor = titleBarInactiveBackground;
         titleBar.InactiveForegroundColor = Microsoft.UI.ColorHelper.FromArgb(255, 128, 128, 128);
-        titleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
-        titleBar.ButtonForegroundColor = dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
+        titleBar.ButtonBackgroundColor = titleBarBackground;
+        titleBar.ButtonForegroundColor = titleBarForeground;
         titleBar.ButtonHoverBackgroundColor = dark
             ? Microsoft.UI.ColorHelper.FromArgb(255, 58, 58, 58)
             : Microsoft.UI.ColorHelper.FromArgb(255, 229, 229, 229);
-        titleBar.ButtonHoverForegroundColor = dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
+        titleBar.ButtonHoverForegroundColor = titleBarForeground;
         titleBar.ButtonPressedBackgroundColor = dark
             ? Microsoft.UI.ColorHelper.FromArgb(255, 72, 72, 72)
             : Microsoft.UI.ColorHelper.FromArgb(255, 204, 204, 204);
-        titleBar.ButtonPressedForegroundColor = dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
-        titleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+        titleBar.ButtonPressedForegroundColor = titleBarForeground;
+        titleBar.ButtonInactiveBackgroundColor = titleBarInactiveBackground;
         titleBar.ButtonInactiveForegroundColor = Microsoft.UI.ColorHelper.FromArgb(255, 128, 128, 128);
     }
 }

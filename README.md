@@ -1,206 +1,124 @@
-# Steam Achievement Translation Installer
+<p align="center">
+  <img src="src/Satl.Gui/Assets/AppIcon.preview.png" width="112" alt="Steam 成就翻译安装器图标">
+</p>
 
-Steam 成就翻译安装器是一个面向 Windows 10/11 x64 的 WinUI 3 桌面应用和命令行工具，用于扫描本地 Steam
-数据，匹配
-[Steam Achievement Translation Library](https://github.com/GaBoron/steam-achievement-translation-library)
-中的成就翻译，安全安装对应 schema，并在需要时恢复安装前文件。
+# Steam 成就翻译安装器
 
-当前版本：**0.1.0（Alpha）**。本项目不负责编辑或创作翻译；需要编辑
-`UserGameStatsSchema_*.bin` 时，可以使用独立的
-[PanVena/SteamAchievementLocalizer](https://github.com/PanVena/SteamAchievementLocalizer)。
+一款面向 Windows 10/11 的 Steam 成就翻译管理工具。它可以自动找到本机游戏，从社区翻译库选择合适版本，并安全完成安装、状态检查与恢复。
 
-## 安全原则
+[![最新版本](https://img.shields.io/github/v/release/GaBoron/steam-achievement-translation-installer?label=最新版本)](https://github.com/GaBoron/steam-achievement-translation-installer/releases/latest)
+[![系统](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4)](#系统要求)
+[![许可证](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-- Steam 正在运行时拒绝写入，不会强制结束 Steam 进程。
-- 只接受 `index.json` version 1，并验证 App ID、版本 ID 和严格的仓库路径。
-- 多版本条目直接读取 `schema_files`，不会通过 GitHub 目录树猜测版本。
-- 下载文件必须同时通过声明大小和对应版本的 SHA-256 校验。
-- 安装前创建快照，在目标目录中暂存后原子替换；失败时自动回滚。
-- 每次重复安装都会保留独立历史。恢复时若目标已被其他程序修改，默认拒绝覆盖。
-- `--force` 恢复会先归档当前目标，然后再恢复安装前快照。
+当前版本：**v0.2.0**
 
-SATL 仍是早期软件。首次使用前建议自行备份 Steam 的
-`appcache\stats` 目录。
+## 下载与安装
 
-## 安装
+请只从 [GitHub Releases](https://github.com/GaBoron/steam-achievement-translation-installer/releases/latest) 下载。
 
-### 便携版
+| 版本 | 适合谁 | 使用方法 |
+| --- | --- | --- |
+| `SATLInstaller-Setup-v0.2.0.exe` | 大多数用户，推荐 | 运行安装程序，之后从开始菜单打开 |
+| `SATLInstaller-Portable-v0.2.0.zip` | 不想安装或需要随身携带 | 解压完整 ZIP，再运行 `SATLInstaller.exe` |
 
-从带标签构建产物中解压 `satl-win-x64.zip`，双击 `SATLInstaller.exe` 打开图形界面。
-便携包同时保留完整命令行工具：
+安装版和便携版功能相同。便携版不能只单独复制 EXE，必须保留解压后的全部文件。
 
-```powershell
-satl.exe --version
-```
+本项目暂未提供代码签名。Windows SmartScreen 可能首次显示安全提醒；请核对下载来源和 Release 中的 SHA-256 后再运行。
 
-当前构建未进行代码签名，Windows 可能显示 SmartScreen 提示。请同时核对发布的
-SHA-256 文件。
+## 三步开始使用
 
-### 图形界面
+1. 打开软件，等待它扫描本机 Steam 游戏。
+2. 勾选需要翻译的游戏，确认翻译版本。
+3. 点击“安装所选”，检查计划并确认执行。
 
-Windows 11 风格界面覆盖完整工作流：
+“已管理”页面会显示 SATL 管理的游戏、当前状态和已安装版本。需要撤销时可恢复安装前文件；如果文件之后被其他程序修改，软件会先拒绝普通恢复，只有在你明确确认后才执行强制恢复并归档当前文件。
 
-- “游戏”页扫描本地 Steam 数据、搜索游戏、显示实际安装版本、选择翻译版本并批量安装。
-- “已管理”页查看 SATL 安装状态和安装版本，执行普通恢复；目标被修改时可明确选择强制恢复并先归档当前文件。
-- “日志”页筛选和查看最近的操作记录，并可打开日志目录或确认后清理日志。
-- “设置”页可覆盖 Steam/数据目录、切换离线模式和主题，配置日志详细程度与保留时间，并刷新翻译目录缓存。
+## 主要功能
 
-GUI 不会绕过 CLI 的安全检查。安装与恢复仍由 `satl.exe` 执行，Steam 正在运行时仍会拒绝写入。
+- 自动检测 Steam 目录和本机成就缓存。
+- 搜索、批量选择并安装社区翻译。
+- 支持同一游戏的多个翻译版本。
+- 显示已安装版本、正常、缺失或被修改等状态。
+- 安装前备份，支持普通恢复和确认后的强制恢复。
+- 在线刷新翻译目录，也可使用离线缓存。
+- 浅色、深色和跟随系统主题。
+- 本地运行日志、保留期限和日志目录管理。
+- 从 GitHub Releases 检查新版本，并打开官方发布页下载。
 
-### Python 源码
+翻译数据来自 [Steam 成就翻译库](https://github.com/GaBoron/steam-achievement-translation-library)。安装器不会编辑翻译内容，也不会把你的 Steam 文件上传到网络。
 
-需要 Python 3.13：
+## 更新检查
 
-```powershell
-python -m pip install -e .
-satl --version
-```
+“设置 → 软件更新”可以手动检查更新，也可以启用启动检查。软件只读取本项目公开的 GitHub Release 信息：
 
-运行测试或构建时安装开发依赖：
+- 有新版本时显示版本号，并提供官方 Release 下载页。
+- 没有新版本时显示当前已是最新版。
+- 不会在后台静默下载、替换或执行安装程序。
 
-```powershell
-python -m pip install -e ".[dev]"
-```
+如果无法访问 GitHub，更新检查失败不会影响扫描、安装或恢复功能。
 
-## 使用
+## 数据与日志
 
-扫描所有本地账号缓存和已安装清单，并匹配可用翻译：
-
-```powershell
-satl scan
-satl scan --json
-satl scan --account 7656119xxxxxxxxxx
-```
-
-安装指定游戏的默认版本，或指定一个多版本条目：
-
-```powershell
-satl install 250900
-satl install 250900 --variant 250900=with-unlock-conditions
-satl install --matched
-```
-
-每次安装都会先打印计划并要求确认。自动化环境必须显式传入 `--yes`：
-
-```powershell
-satl install 250900 --yes
-satl install --matched --yes
-```
-
-`status` 可以在没有 Steam 的情况下读取 SATL 的本地事务记录：
-
-```powershell
-satl status
-satl status 250900 --json
-```
-
-恢复最近一次安装前的状态：
-
-```powershell
-satl restore 250900
-satl restore --all
-```
-
-如果 Steam 或游戏已经改写目标文件，普通恢复会拒绝操作。确认需要恢复时，使用：
-
-```powershell
-satl restore 250900 --force
-```
-
-查看计划而不下载、创建目录或写入文件：
-
-```powershell
-satl install --matched --dry-run
-satl restore --all --dry-run
-```
-
-刷新 catalog 或只使用经过验证的缓存：
-
-```powershell
-satl cache refresh
-satl scan --offline
-satl install 250900 --offline
-```
-
-Steam 自动检测失败时，各相关命令均支持 `--steam-dir`。测试或便携环境可用
-`--data-dir` 覆盖默认数据目录。默认目录是：
+默认数据目录：
 
 ```text
-%LOCALAPPDATA%\SteamAchievementTranslationInstaller
+%LOCALAPPDATA%\SteamAchievementTranslationInstaller\
 ```
 
-其中包含：
+这里会保存设置、目录缓存、安装状态、备份、恢复归档和可选运行日志。日志只记录操作结果与错误信息，不记录成就文件正文。你可以在设置中关闭日志或调整保留时间。
 
-- `cache/index.json`：最近一次验证通过的 catalog。
-- `cache/schemas/<sha256>.bin`：按内容哈希保存的 schema。
-- `backups/<app-id>/<transaction-id>/`：安装和强制恢复快照。
-- `state.json`：version 1 的原子事务状态。
-- `gui-settings.json`：图形界面设置。
-- `logs/satl-gui-<日期>.log`：按日记录的图形界面运行日志。
+## 系统要求
 
-## JSON 输出
+- Windows 10 版本 2004（Build 19041）或更高版本，推荐 Windows 11。
+- x64 处理器。
+- 已安装 Steam；使用离线缓存时可暂时不联网。
 
-`scan --json` 和 `status --json` 返回记录数组。每条记录稳定包含：
+发布包包含所需的 .NET 与 Windows App SDK 运行文件，无需另外安装运行库。
 
-```json
-{
-  "app_id": "250900",
-  "game_name": "The Binding of Isaac: Rebirth 以撒的结合：重生",
-  "discovery": ["account-cache", "installed"],
-  "catalog_status": "current",
-  "variants": [],
-  "installed_state": "unmanaged",
-  "installed_variant_id": null,
-  "action": "available",
-  "error": null
-}
-```
+## 常见问题
 
-桌面前端使用各命令的 `--jsonl` 模式。每行都是独立事件，包含
-`protocol_version`、`operation`、`event` 和 `payload`；协议版本当前为 1。
-人类可读输出以及原有 `scan/status --json` 输出保持兼容。
+### 没有扫描到游戏
 
-退出码：
+先启动 Steam 和对应游戏一次，让 Steam 生成成就缓存；也可以在设置中手动选择 Steam 目录，然后重新扫描。
 
-| 退出码 | 含义 |
-|---:|---|
-| 0 | 成功 |
-| 2 | 参数错误、缺少确认或用户取消 |
-| 3 | Steam 正在运行、路径或本地数据预检查失败 |
-| 4 | 网络、catalog 或缓存失败 |
-| 5 | 大小、SHA-256 或备份完整性失败 |
-| 6 | 文件系统或事务失败 |
-| 7 | 批量操作部分失败 |
+### 安装后翻译消失
 
-## 状态说明
+Steam 或游戏更新可能重新生成成就缓存。重新扫描后再次安装即可；如果翻译库条目已经过期，请前往翻译库报告。
 
-- `unmanaged`：SATL 没有安装记录。
-- `installed`：目标与最近一次 SATL 安装的 SHA-256 一致。
-- `modified`：安装后目标被其他程序修改。
-- `missing`：安装记录存在，但目标文件已不存在。
-- `restored`：所有 SATL 安装记录均已恢复。
-- `unreadable`：无法读取目标文件。
+### 为什么恢复被拒绝
 
-catalog 中不是 `current` 的条目会在扫描中显示，但安装时默认阻止。明确接受风险时
-可使用 `--allow-outdated`。
+目标文件在安装后被修改。为避免覆盖其他程序或 Steam 的新数据，普通恢复会停止。确认文件确实可以替换后，再使用带二次确认的强制恢复。
+
+### 资源管理器仍显示旧图标
+
+Windows 可能缓存相同路径的旧 EXE 图标。请删除旧解压目录，并把新版便携包解压到新文件夹。
+
+## 相关项目
+
+- [Steam 成就翻译库](https://github.com/GaBoron/steam-achievement-translation-library)：查找和提交社区翻译数据。
+- [Steam Achievement Localizer Skill](https://github.com/GaBoron/steam-achievement-localizer-skill)：使用 Codex 辅助制作与审核翻译。
+- [SteamAchievementLocalizer](https://github.com/PanVena/SteamAchievementLocalizer)：本地可视化翻译编辑器。
 
 ## 开发与构建
 
+普通用户不需要执行本节。
+
+开发环境需要 Windows 10/11 x64、Python 3.13、.NET 10 SDK、WinUI 3 工具链和 Inno Setup 6。
+
 ```powershell
-python -m compileall -q src tests scripts
-python -m pytest -q
-python scripts/offline_smoke.py
-dotnet test tests/Satl.Gui.Tests/Satl.Gui.Tests.csproj -c Release -p:Platform=x64
-powershell -ExecutionPolicy Bypass -File scripts/generate_app_icon.ps1
-powershell -ExecutionPolicy Bypass -File scripts/build.ps1
+python -m venv .venv
+.\.venv\Scripts\pip.exe install -e ".[dev]"
+powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
 ```
 
-标签构建会生成 `satl-win-x64.zip` 和对应 SHA-256 文件，但不会自动创建 GitHub
-Release。
+构建结果位于 `dist\release\`：安装版 EXE、便携版 ZIP 和 `SHA256SUMS.txt`。
 
-## 范围
+命令行高级用法可运行：
 
-0.1.0 不包含自动更新、schema 编辑、翻译生成、Linux 或 macOS 支持。
+```powershell
+satl --help
+```
 
-许可证和第三方权利说明见 [LICENSE](LICENSE) 与
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+## 许可证
+
+程序代码采用 [MIT License](LICENSE)。第三方组件和翻译数据的权利说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

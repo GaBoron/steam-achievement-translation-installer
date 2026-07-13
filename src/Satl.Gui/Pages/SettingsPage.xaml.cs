@@ -3,6 +3,7 @@ using Microsoft.Windows.Storage.Pickers;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Satl_Gui.Models;
+using Satl_Gui.Services;
 using Satl_Gui.ViewModels;
 
 namespace Satl_Gui.Pages;
@@ -32,6 +33,10 @@ public sealed partial class SettingsPage : Page
         LoggingSwitch.IsOn = ViewModel.Settings.LoggingEnabled;
         LogLevelBox.SelectedIndex = ViewModel.Settings.LogLevel == "detailed" ? 1 : 0;
         LogRetentionBox.SelectedIndex = ViewModel.Settings.LogRetentionDays switch { 7 => 0, 90 => 2, _ => 1 };
+        UpdateCheckSwitch.IsOn = ViewModel.Settings.CheckForUpdatesOnStartup;
+        UpdateStatusText.Text = $"当前版本 v{UpdateService.CurrentVersionText}。";
+        AboutVersionText.Text = $"版本 {UpdateService.CurrentVersionText} · Windows 10/11 x64";
+        OpenReleaseButton.Visibility = ViewModel.LatestReleasePage is null ? Visibility.Collapsed : Visibility.Visible;
         RefreshDirectoryLabels();
         _isInitializing = false;
     }
@@ -55,6 +60,7 @@ public sealed partial class SettingsPage : Page
                 LoggingEnabled = LoggingSwitch.IsOn,
                 LogLevel = logLevel,
                 LogRetentionDays = retention,
+                CheckForUpdatesOnStartup = UpdateCheckSwitch.IsOn,
             });
             RefreshDirectoryLabels();
         }
@@ -69,6 +75,27 @@ public sealed partial class SettingsPage : Page
     }
 
     private async void RefreshCache_Click(object sender, RoutedEventArgs e) => await ViewModel.RefreshCacheAsync();
+
+    private async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        var result = await ViewModel.CheckForUpdatesAsync();
+        if (result is null)
+        {
+            return;
+        }
+        UpdateStatusText.Text = result.Message;
+        OpenReleaseButton.Visibility = result.ReleasePage is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OpenRelease_Click(object sender, RoutedEventArgs e)
+    {
+        var releasePage = ViewModel.LatestReleasePage;
+        if (releasePage is null)
+        {
+            return;
+        }
+        Process.Start(new ProcessStartInfo(releasePage.AbsoluteUri) { UseShellExecute = true });
+    }
 
     private async void BrowseSteamDirectory_Click(object sender, RoutedEventArgs e)
     {
@@ -131,6 +158,14 @@ public sealed partial class SettingsPage : Page
     private async void LogSettings_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_isInitializing && IsLoaded)
+        {
+            await ApplySettingsAsync();
+        }
+    }
+
+    private async void UpdateCheckSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_isInitializing)
         {
             await ApplySettingsAsync();
         }

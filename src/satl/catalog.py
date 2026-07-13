@@ -12,6 +12,7 @@ from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
+from satl import __version__
 from satl.errors import CatalogError, IntegrityError
 from satl.models import Catalog, CatalogEntry, SchemaVariant
 
@@ -23,7 +24,10 @@ APP_ID_RE = re.compile(r"^[0-9]+$")
 VARIANT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 MAX_CATALOG_BYTES = 8 * 1024 * 1024
-USER_AGENT = "satl/0.1.0 (+https://github.com/GaBoron/steam-achievement-translation-installer)"
+USER_AGENT = (
+    f"satl/{__version__} "
+    "(+https://github.com/GaBoron/steam-achievement-translation-installer)"
+)
 
 
 def sha256_file(path: Path) -> str:

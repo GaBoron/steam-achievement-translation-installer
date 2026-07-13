@@ -2,12 +2,26 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $DistRoot = Join-Path $ProjectRoot "dist"
 $CliRoot = Join-Path $DistRoot "satl"
-$PackageRoot = Join-Path $DistRoot "satl-win-x64"
+$PackageRoot = Join-Path $DistRoot "package-win-x64"
 $GuiPublishRoot = Join-Path $DistRoot "gui-win-x64"
+$ReleaseRoot = Join-Path $DistRoot "release"
 $GuiBuildRoot = Join-Path $ProjectRoot "build\gui-publish-intermediate"
-$Archive = Join-Path $DistRoot "satl-win-x64.zip"
 $VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 $Python = if (Test-Path $VenvPython) { $VenvPython } else { "python" }
+$GuiProject = Join-Path $ProjectRoot "src\Satl.Gui\Satl.Gui.csproj"
+$InstallerScript = Join-Path $ProjectRoot "installer\SATLInstaller.iss"
+$IconPath = Join-Path $ProjectRoot "src\Satl.Gui\Assets\AppIcon.ico"
+
+[xml] $GuiProjectXml = Get-Content -LiteralPath $GuiProject -Raw -Encoding UTF8
+$Version = @($GuiProjectXml.Project.PropertyGroup.Version | Where-Object { $_ })[0]
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    throw "The WinUI project does not define a release version"
+}
+$PortableName = "SATLInstaller-Portable-v$Version.zip"
+$SetupName = "SATLInstaller-Setup-v$Version.exe"
+$PortableArchive = Join-Path $ReleaseRoot $PortableName
+$SetupExecutable = Join-Path $ReleaseRoot $SetupName
+$Checksums = Join-Path $ReleaseRoot "SHA256SUMS.txt"
 
 function Assert-WithinProject([string] $Path) {
     $ResolvedProject = [System.IO.Path]::GetFullPath($ProjectRoot).TrimEnd('\') + '\'
@@ -17,35 +31,39 @@ function Assert-WithinProject([string] $Path) {
     }
 }
 
-Assert-WithinProject $DistRoot
-Assert-WithinProject $CliRoot
-Assert-WithinProject $PackageRoot
-Assert-WithinProject $GuiPublishRoot
-Assert-WithinProject $GuiBuildRoot
-Assert-WithinProject $Archive
+function Find-InnoCompiler {
+    $Candidates = @(
+        (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source,
+        (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
+        "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+        "C:\Program Files\Inno Setup 6\ISCC.exe"
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+    return $Candidates | Select-Object -First 1
+}
+
+@($DistRoot, $CliRoot, $PackageRoot, $GuiPublishRoot, $ReleaseRoot, $GuiBuildRoot) |
+    ForEach-Object { Assert-WithinProject $_ }
 
 Push-Location $ProjectRoot
 try {
     & $Python -m PyInstaller --noconfirm --clean --onedir --name satl --paths src src/satl/__main__.py
-    & (Join-Path $CliRoot "satl.exe") --version
-    if ($LASTEXITCODE -ne 0) {
-        throw "Built satl.exe failed its version smoke test"
+    $CliVersion = & (Join-Path $CliRoot "satl.exe") --version
+    if ($LASTEXITCODE -ne 0 -or $CliVersion -ne "satl $Version") {
+        throw "Built satl.exe has unexpected version: $CliVersion"
     }
 
-    if (Test-Path $GuiPublishRoot) {
-        Remove-Item -LiteralPath $GuiPublishRoot -Recurse -Force
+    foreach ($Path in @($GuiPublishRoot, $GuiBuildRoot, $PackageRoot, $ReleaseRoot)) {
+        if (Test-Path $Path) {
+            Remove-Item -LiteralPath $Path -Recurse -Force
+        }
+        New-Item -ItemType Directory -Path $Path | Out-Null
     }
-    if (Test-Path $GuiBuildRoot) {
-        Remove-Item -LiteralPath $GuiBuildRoot -Recurse -Force
-    }
-    New-Item -ItemType Directory -Path $GuiPublishRoot | Out-Null
-    New-Item -ItemType Directory -Path $GuiBuildRoot | Out-Null
 
-    & dotnet publish src/Satl.Gui/Satl.Gui.csproj `
+    & dotnet publish $GuiProject `
         -c Release `
         -r win-x64 `
         -p:Platform=x64 `
-        -p:OutDir="$GuiBuildRoot\" `
+        "-p:OutDir=$GuiBuildRoot" `
         --self-contained true `
         -o $GuiPublishRoot
     if ($LASTEXITCODE -ne 0) {
@@ -56,23 +74,56 @@ try {
         throw "WinUI publish did not produce SATLInstaller.exe"
     }
 
-    if (Test-Path $PackageRoot) {
-        Remove-Item -LiteralPath $PackageRoot -Recurse -Force
+    Add-Type -AssemblyName System.Drawing
+    $EmbeddedIcon = [System.Drawing.Icon]::ExtractAssociatedIcon($GuiExecutable)
+    if ($null -eq $EmbeddedIcon -or $EmbeddedIcon.Width -lt 16 -or $EmbeddedIcon.Height -lt 16) {
+        throw "WinUI executable does not contain a usable embedded application icon"
     }
-    New-Item -ItemType Directory -Path $PackageRoot | Out-Null
+    $GuiVersion = (Get-Item -LiteralPath $GuiExecutable).VersionInfo
+    if ($GuiVersion.ProductVersion -notlike "$Version*") {
+        throw "WinUI executable has unexpected product version: $($GuiVersion.ProductVersion)"
+    }
+
     Copy-Item -Path (Join-Path $GuiPublishRoot "*") -Destination $PackageRoot -Recurse
     Copy-Item -Path (Join-Path $CliRoot "*") -Destination $PackageRoot -Recurse
-    Copy-Item -LiteralPath (Join-Path $ProjectRoot "README.md") -Destination $PackageRoot
-    Copy-Item -LiteralPath (Join-Path $ProjectRoot "LICENSE") -Destination $PackageRoot
-    Copy-Item -LiteralPath (Join-Path $ProjectRoot "THIRD_PARTY_NOTICES.md") -Destination $PackageRoot
-
-    if (Test-Path $Archive) {
-        Remove-Item -LiteralPath $Archive -Force
+    foreach ($Document in @("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md")) {
+        Copy-Item -LiteralPath (Join-Path $ProjectRoot $Document) -Destination $PackageRoot
     }
-    Compress-Archive -Path (Join-Path $PackageRoot "*") -DestinationPath $Archive
-    $Hash = (Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash.ToLowerInvariant()
-    Set-Content -LiteralPath "$Archive.sha256" -Value "$Hash  satl-win-x64.zip" -Encoding ascii
-    Write-Host "Built $Archive"
+    Get-ChildItem -LiteralPath $PackageRoot -Filter "*.pdb" -File -Recurse |
+        Remove-Item -Force
+    $PreviewPath = Join-Path $PackageRoot "Assets\AppIcon.preview.png"
+    if (Test-Path $PreviewPath) {
+        Remove-Item -LiteralPath $PreviewPath -Force
+    }
+    Get-ChildItem -LiteralPath $PackageRoot -Directory |
+        Where-Object {
+            $_.Name -match '^[a-z]{2,3}(?:-[A-Za-z0-9]+)+$' -and
+            $_.Name -notin @("en-us", "zh-CN")
+        } |
+        Remove-Item -Recurse -Force
+
+    Compress-Archive -Path (Join-Path $PackageRoot "*") -DestinationPath $PortableArchive
+
+    $InnoCompiler = Find-InnoCompiler
+    if (-not $InnoCompiler) {
+        throw "Inno Setup 6 is required to build the installable release"
+    }
+    & $InnoCompiler `
+        "/DSourceRoot=$PackageRoot" `
+        "/DOutputRoot=$ReleaseRoot" `
+        "/DMyAppVersion=$Version" `
+        "/DMyAppIcon=$IconPath" `
+        $InstallerScript
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $SetupExecutable)) {
+        throw "Inno Setup did not produce $SetupName"
+    }
+
+    $HashLines = foreach ($ReleaseFile in @($SetupExecutable, $PortableArchive)) {
+        $Hash = (Get-FileHash -LiteralPath $ReleaseFile -Algorithm SHA256).Hash.ToLowerInvariant()
+        "$Hash  $([System.IO.Path]::GetFileName($ReleaseFile))"
+    }
+    Set-Content -LiteralPath $Checksums -Value $HashLines -Encoding ascii
+    Write-Host "Built release assets in $ReleaseRoot"
 }
 finally {
     Pop-Location

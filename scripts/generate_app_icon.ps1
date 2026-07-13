@@ -122,23 +122,6 @@ function Save-AppIconPng([string] $Path, [int] $Size) {
     }
 }
 
-function Save-CenteredCanvas([string] $Path, [int] $Width, [int] $Height, [int] $IconSize) {
-    $canvas = [System.Drawing.Bitmap]::new($Width, $Height, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    $graphics = [System.Drawing.Graphics]::FromImage($canvas)
-    $icon = New-AppIconBitmap $IconSize
-    try {
-        $graphics.Clear([System.Drawing.Color]::Transparent)
-        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-        $graphics.DrawImage($icon, [int](($Width - $IconSize) / 2), [int](($Height - $IconSize) / 2), $IconSize, $IconSize)
-        $canvas.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
-    }
-    finally {
-        $icon.Dispose()
-        $graphics.Dispose()
-        $canvas.Dispose()
-    }
-}
-
 function Save-AppIconIco([string] $Path) {
     $images = @()
     foreach ($size in @(16, 24, 32, 48, 64, 128, 256)) {
@@ -185,14 +168,6 @@ function Save-AppIconIco([string] $Path) {
 
 New-Item -ItemType Directory -Path $AssetRoot -Force | Out-Null
 Save-AppIconPng (Join-Path $AssetRoot "AppIcon.preview.png") 512
-Save-AppIconPng (Join-Path $AssetRoot "Square150x150Logo.scale-200.png") 300
-Save-AppIconPng (Join-Path $AssetRoot "Square44x44Logo.scale-200.png") 88
-Save-AppIconPng (Join-Path $AssetRoot "Square44x44Logo.targetsize-24_altform-unplated.png") 24
-Save-AppIconPng (Join-Path $AssetRoot "Square44x44Logo.targetsize-48_altform-lightunplated.png") 48
-Save-AppIconPng (Join-Path $AssetRoot "StoreLogo.png") 50
-Save-AppIconPng (Join-Path $AssetRoot "LockScreenLogo.scale-200.png") 48
-Save-CenteredCanvas (Join-Path $AssetRoot "Wide310x150Logo.scale-200.png") 620 300 220
-Save-CenteredCanvas (Join-Path $AssetRoot "SplashScreen.scale-200.png") 1240 600 300
 Save-AppIconIco (Join-Path $AssetRoot "AppIcon.ico")
 
-Write-Host "Generated SATL application icon assets in $AssetRoot"
+Write-Host "Generated SATL application icon and preview in $AssetRoot"

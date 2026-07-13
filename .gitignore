@@ -16,6 +16,16 @@ TestResults/
 *.sha256
 .idea/
 .vscode/
+.agents/
+.codex/
+AGENTS.md
+agents.md
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
 *.log
 *.tmp
 *.part
