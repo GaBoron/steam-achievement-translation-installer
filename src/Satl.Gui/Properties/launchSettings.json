@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Satl.Gui (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Satl.Gui (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

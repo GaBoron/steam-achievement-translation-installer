@@ -1,7 +1,9 @@
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $DistRoot = Join-Path $ProjectRoot "dist"
+$CliRoot = Join-Path $DistRoot "satl"
 $PackageRoot = Join-Path $DistRoot "satl-win-x64"
+$GuiPublishRoot = Join-Path $DistRoot "gui-win-x64"
 $Archive = Join-Path $DistRoot "satl-win-x64.zip"
 $VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 $Python = if (Test-Path $VenvPython) { $VenvPython } else { "python" }
@@ -15,22 +17,44 @@ function Assert-WithinProject([string] $Path) {
 }
 
 Assert-WithinProject $DistRoot
+Assert-WithinProject $CliRoot
 Assert-WithinProject $PackageRoot
+Assert-WithinProject $GuiPublishRoot
 Assert-WithinProject $Archive
 
 Push-Location $ProjectRoot
 try {
-    & $Python -m PyInstaller --noconfirm --clean --onefile --name satl --paths src src/satl/__main__.py
-    & (Join-Path $DistRoot "satl.exe") --version
+    & $Python -m PyInstaller --noconfirm --clean --onedir --name satl --paths src src/satl/__main__.py
+    & (Join-Path $CliRoot "satl.exe") --version
     if ($LASTEXITCODE -ne 0) {
         throw "Built satl.exe failed its version smoke test"
+    }
+
+    if (Test-Path $GuiPublishRoot) {
+        Remove-Item -LiteralPath $GuiPublishRoot -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $GuiPublishRoot | Out-Null
+
+    & dotnet publish src/Satl.Gui/Satl.Gui.csproj `
+        -c Release `
+        -r win-x64 `
+        -p:Platform=x64 `
+        --self-contained true `
+        -o $GuiPublishRoot
+    if ($LASTEXITCODE -ne 0) {
+        throw "WinUI publish failed"
+    }
+    $GuiExecutable = Join-Path $GuiPublishRoot "SATLInstaller.exe"
+    if (-not (Test-Path $GuiExecutable)) {
+        throw "WinUI publish did not produce SATLInstaller.exe"
     }
 
     if (Test-Path $PackageRoot) {
         Remove-Item -LiteralPath $PackageRoot -Recurse -Force
     }
     New-Item -ItemType Directory -Path $PackageRoot | Out-Null
-    Copy-Item -LiteralPath (Join-Path $DistRoot "satl.exe") -Destination $PackageRoot
+    Copy-Item -Path (Join-Path $GuiPublishRoot "*") -Destination $PackageRoot -Recurse
+    Copy-Item -Path (Join-Path $CliRoot "*") -Destination $PackageRoot -Recurse
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "README.md") -Destination $PackageRoot
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "LICENSE") -Destination $PackageRoot
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "THIRD_PARTY_NOTICES.md") -Destination $PackageRoot

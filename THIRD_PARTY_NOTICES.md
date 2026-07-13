@@ -1,5 +1,12 @@
 # Third-Party Notices
 
+## Desktop application dependencies
+
+The Windows desktop interface uses the MIT-licensed Microsoft Windows App SDK,
+Microsoft Windows SDK Build Tools, and CommunityToolkit.Mvvm projects. Test-only
+dependencies include the MIT-licensed xUnit.net runner and Microsoft.NET.Test.Sdk.
+Their respective copyright and license notices remain with those projects.
+
 ## Translation data
 
 This program downloads community-maintained achievement schema files from

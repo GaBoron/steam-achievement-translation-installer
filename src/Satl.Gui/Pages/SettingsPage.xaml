@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="Satl_Gui.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel Padding="32,24,32,32" Spacing="20" MaxWidth="880" HorizontalAlignment="Left">
+            <StackPanel Spacing="4">
+                <TextBlock Text="设置" Style="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock Text="路径留空时使用 SATL 自动检测和默认数据目录。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+            <Border Padding="20" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                <StackPanel Spacing="16">
+                    <TextBox x:Name="SteamDirectoryBox" Header="Steam 目录" PlaceholderText="自动检测" AutomationProperties.Name="Steam 目录" />
+                    <TextBox x:Name="DataDirectoryBox" Header="SATL 数据目录" PlaceholderText="使用 %LOCALAPPDATA% 默认目录" AutomationProperties.Name="SATL 数据目录" />
+                    <ToggleSwitch x:Name="OfflineSwitch" Header="离线模式" OffContent="允许联网刷新" OnContent="仅使用已验证缓存" />
+                    <ComboBox x:Name="ThemeBox" Header="应用主题" SelectedIndex="0">
+                        <ComboBoxItem Content="跟随系统" Tag="system" />
+                        <ComboBoxItem Content="浅色" Tag="light" />
+                        <ComboBoxItem Content="深色" Tag="dark" />
+                    </ComboBox>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="保存设置" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" />
+                        <Button Content="刷新翻译目录" Click="RefreshCache_Click" />
+                        <Button Content="打开数据目录" Click="OpenData_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <Border Padding="20" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Steam 成就翻译安装器" Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock Text="版本 0.1.0 Alpha · Windows 10/11 x64" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="GUI 只负责展示与确认；安装、校验、备份和恢复继续由 satl 核心执行。" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

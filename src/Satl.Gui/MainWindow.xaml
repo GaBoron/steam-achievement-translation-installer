@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="Satl_Gui.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Steam 成就翻译安装器">
+    <Frame x:Name="RootFrame" />
+</Window>

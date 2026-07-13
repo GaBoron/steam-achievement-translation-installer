@@ -1,0 +1,413 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Satl_Gui.Models;
+using Satl_Gui.Services;
+
+namespace Satl_Gui.ViewModels;
+
+public sealed class MainViewModel : ObservableObject
+{
+    private readonly SatlCliService _cli = new();
+    private readonly SettingsService _settingsService = new();
+    private string _searchText = string.Empty;
+    private bool _isBusy;
+    private string _statusMessage = "准备就绪";
+    private bool _isInfoOpen;
+    private string _infoMessage = string.Empty;
+    private InfoBarSeverity _infoSeverity = InfoBarSeverity.Informational;
+
+    public ObservableCollection<GameItem> Games { get; } = [];
+    public ObservableCollection<GameItem> VisibleGames { get; } = [];
+    public ObservableCollection<GameItem> ManagedGames { get; } = [];
+    public GuiSettings Settings { get; private set; } = new();
+    public string SettingsPath => _settingsService.SettingsPath;
+
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (SetProperty(ref _searchText, value))
+            {
+                ApplyFilter();
+            }
+        }
+    }
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        private set => SetProperty(ref _isBusy, value);
+    }
+
+    public string StatusMessage
+    {
+        get => _statusMessage;
+        private set => SetProperty(ref _statusMessage, value);
+    }
+
+    public bool IsInfoOpen
+    {
+        get => _isInfoOpen;
+        set => SetProperty(ref _isInfoOpen, value);
+    }
+
+    public string InfoMessage
+    {
+        get => _infoMessage;
+        private set => SetProperty(ref _infoMessage, value);
+    }
+
+    public InfoBarSeverity InfoSeverity
+    {
+        get => _infoSeverity;
+        private set => SetProperty(ref _infoSeverity, value);
+    }
+
+    public async Task InitializeAsync()
+    {
+        Settings = await _settingsService.LoadAsync();
+        OnPropertyChanged(nameof(Settings));
+        ApplyTheme();
+        await ScanAsync();
+    }
+
+    public async Task ScanAsync()
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+        IsBusy = true;
+        IsInfoOpen = false;
+        try
+        {
+            await ScanCoreAsync();
+            await LoadManagedCoreAsync();
+            ShowInfo($"扫描完成，匹配到 {Games.Count} 个可用翻译。", InfoBarSeverity.Success);
+        }
+        catch (Exception exception)
+        {
+            ShowInfo(exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            StatusMessage = "准备就绪";
+            IsBusy = false;
+        }
+    }
+
+    public async Task<CliRunResult?> PreviewInstallAsync(IReadOnlyList<GameItem> selected)
+    {
+        return await RunPreviewAsync(BuildInstallArguments(selected, dryRun: true, yes: false), "正在检查安装计划…");
+    }
+
+    public async Task InstallAsync(IReadOnlyList<GameItem> selected)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+        IsBusy = true;
+        IsInfoOpen = false;
+        try
+        {
+            var result = await RunCliAsync(BuildInstallArguments(selected, dryRun: false, yes: true), "正在安装翻译…");
+            if (!result.IsSuccess)
+            {
+                ShowResultError(result);
+                return;
+            }
+            await ScanCoreAsync();
+            await LoadManagedCoreAsync();
+            ShowInfo("所选翻译已安装。", InfoBarSeverity.Success);
+        }
+        catch (Exception exception)
+        {
+            ShowInfo(exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            StatusMessage = "准备就绪";
+            IsBusy = false;
+        }
+    }
+
+    public async Task<CliRunResult?> PreviewRestoreAsync(IReadOnlyList<GameItem> selected, bool force)
+    {
+        return await RunPreviewAsync(BuildRestoreArguments(selected, dryRun: true, yes: false, force), "正在检查恢复计划…");
+    }
+
+    public async Task RestoreAsync(IReadOnlyList<GameItem> selected, bool force)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+        IsBusy = true;
+        IsInfoOpen = false;
+        try
+        {
+            var result = await RunCliAsync(
+                BuildRestoreArguments(selected, dryRun: false, yes: true, force),
+                force ? "正在强制恢复并归档当前文件…" : "正在恢复安装前文件…");
+            if (!result.IsSuccess)
+            {
+                ShowResultError(result);
+                return;
+            }
+            await ScanCoreAsync();
+            await LoadManagedCoreAsync();
+            ShowInfo(force ? "已归档当前文件并完成恢复。" : "已恢复安装前文件。", InfoBarSeverity.Success);
+        }
+        catch (Exception exception)
+        {
+            ShowInfo(exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            StatusMessage = "准备就绪";
+            IsBusy = false;
+        }
+    }
+
+    public async Task RefreshCacheAsync()
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+        IsBusy = true;
+        IsInfoOpen = false;
+        try
+        {
+            var arguments = new List<string> { "cache", "refresh", "--jsonl" };
+            AddDataDirectory(arguments);
+            var result = await RunCliAsync(arguments, "正在刷新翻译目录…");
+            if (!result.IsSuccess)
+            {
+                ShowResultError(result);
+                return;
+            }
+            await ScanCoreAsync();
+            await LoadManagedCoreAsync();
+            ShowInfo("翻译目录缓存已刷新。", InfoBarSeverity.Success);
+        }
+        catch (Exception exception)
+        {
+            ShowInfo(exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            StatusMessage = "准备就绪";
+            IsBusy = false;
+        }
+    }
+
+    public async Task SaveSettingsAsync(GuiSettings settings)
+    {
+        Settings = settings;
+        await _settingsService.SaveAsync(settings);
+        OnPropertyChanged(nameof(Settings));
+        ApplyTheme();
+        ShowInfo("设置已保存，将在下一次操作时生效。", InfoBarSeverity.Success);
+    }
+
+    public void ShowInfo(string message, InfoBarSeverity severity = InfoBarSeverity.Informational)
+    {
+        InfoMessage = message;
+        InfoSeverity = severity;
+        IsInfoOpen = true;
+    }
+
+    private async Task<CliRunResult?> RunPreviewAsync(IReadOnlyList<string> arguments, string status)
+    {
+        if (IsBusy)
+        {
+            return null;
+        }
+        IsBusy = true;
+        IsInfoOpen = false;
+        try
+        {
+            var result = await RunCliAsync(arguments, status);
+            if (!result.IsSuccess)
+            {
+                ShowResultError(result);
+                return null;
+            }
+            return result;
+        }
+        catch (Exception exception)
+        {
+            ShowInfo(exception.Message, InfoBarSeverity.Error);
+            return null;
+        }
+        finally
+        {
+            StatusMessage = "准备就绪";
+            IsBusy = false;
+        }
+    }
+
+    private async Task ScanCoreAsync()
+    {
+        var arguments = new List<string> { "scan", "--jsonl" };
+        AddCommonArguments(arguments, includeSteamDirectory: true, includeOffline: true);
+        var result = await RunCliAsync(arguments, "正在扫描本地 Steam 数据…");
+        if (!result.IsSuccess)
+        {
+            throw new InvalidOperationException(ResultError(result));
+        }
+
+        Games.Clear();
+        foreach (var satlEvent in result.Events.Where(item => item.Event == "item-succeeded"))
+        {
+            Games.Add(GameItem.FromPayload(satlEvent.Payload));
+        }
+        ApplyFilter();
+    }
+
+    private async Task LoadManagedCoreAsync()
+    {
+        var arguments = new List<string> { "status", "--jsonl" };
+        AddCommonArguments(arguments, includeSteamDirectory: false, includeOffline: true);
+        var result = await RunCliAsync(arguments, "正在读取安装状态…");
+        if (!result.IsSuccess)
+        {
+            throw new InvalidOperationException(ResultError(result));
+        }
+
+        ManagedGames.Clear();
+        foreach (var satlEvent in result.Events.Where(item => item.Event == "item-succeeded"))
+        {
+            var managed = GameItem.FromPayload(satlEvent.Payload);
+            ManagedGames.Add(managed);
+            var scanned = Games.FirstOrDefault(item => item.AppId == managed.AppId);
+            if (scanned is not null)
+            {
+                scanned.InstalledState = managed.InstalledState;
+            }
+        }
+    }
+
+    private async Task<CliRunResult> RunCliAsync(IReadOnlyList<string> arguments, string status)
+    {
+        StatusMessage = status;
+        return await _cli.RunAsync(arguments, satlEvent =>
+        {
+            if (satlEvent.Event == "item-started" && satlEvent.Payload.TryGetProperty("app_id", out var appId))
+            {
+                App.DispatcherQueue.TryEnqueue(() => StatusMessage = $"正在处理 App ID {appId.GetString()}…");
+            }
+            else if (satlEvent.Event == "warning" && satlEvent.Payload.TryGetProperty("message", out var warning))
+            {
+                App.DispatcherQueue.TryEnqueue(() => ShowInfo(warning.GetString() ?? "正在使用本地缓存。"));
+            }
+        });
+    }
+
+    private List<string> BuildInstallArguments(IReadOnlyList<GameItem> selected, bool dryRun, bool yes)
+    {
+        var arguments = new List<string> { "install" };
+        arguments.AddRange(selected.Select(item => item.AppId));
+        foreach (var item in selected.Where(item => item.SelectedVariant is not null))
+        {
+            arguments.Add("--variant");
+            arguments.Add($"{item.AppId}={item.SelectedVariant!.VariantId}");
+        }
+        if (selected.Any(item => !item.IsCurrent))
+        {
+            arguments.Add("--allow-outdated");
+        }
+        if (dryRun)
+        {
+            arguments.Add("--dry-run");
+        }
+        if (yes)
+        {
+            arguments.Add("--yes");
+        }
+        arguments.Add("--jsonl");
+        AddCommonArguments(arguments, includeSteamDirectory: true, includeOffline: true);
+        return arguments;
+    }
+
+    private List<string> BuildRestoreArguments(IReadOnlyList<GameItem> selected, bool dryRun, bool yes, bool force)
+    {
+        var arguments = new List<string> { "restore" };
+        arguments.AddRange(selected.Select(item => item.AppId));
+        if (force)
+        {
+            arguments.Add("--force");
+        }
+        if (dryRun)
+        {
+            arguments.Add("--dry-run");
+        }
+        if (yes)
+        {
+            arguments.Add("--yes");
+        }
+        arguments.Add("--jsonl");
+        AddCommonArguments(arguments, includeSteamDirectory: true, includeOffline: false);
+        return arguments;
+    }
+
+    private void AddCommonArguments(List<string> arguments, bool includeSteamDirectory, bool includeOffline)
+    {
+        AddDataDirectory(arguments);
+        if (includeSteamDirectory && !string.IsNullOrWhiteSpace(Settings.SteamDirectory))
+        {
+            arguments.Add("--steam-dir");
+            arguments.Add(Settings.SteamDirectory);
+        }
+        if (includeOffline && Settings.Offline)
+        {
+            arguments.Add("--offline");
+        }
+    }
+
+    private void AddDataDirectory(List<string> arguments)
+    {
+        if (!string.IsNullOrWhiteSpace(Settings.DataDirectory))
+        {
+            arguments.Add("--data-dir");
+            arguments.Add(Settings.DataDirectory);
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        VisibleGames.Clear();
+        var query = SearchText.Trim();
+        foreach (var game in Games.Where(game =>
+                     string.IsNullOrWhiteSpace(query)
+                     || game.GameName.Contains(query, StringComparison.CurrentCultureIgnoreCase)
+                     || game.AppId.Contains(query, StringComparison.OrdinalIgnoreCase)))
+        {
+            VisibleGames.Add(game);
+        }
+    }
+
+    private void ApplyTheme()
+    {
+        if (App.Window.Content is not FrameworkElement root)
+        {
+            return;
+        }
+        root.RequestedTheme = Settings.Theme switch
+        {
+            "light" => ElementTheme.Light,
+            "dark" => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
+    }
+
+    private void ShowResultError(CliRunResult result) => ShowInfo(ResultError(result), InfoBarSeverity.Error);
+
+    private static string ResultError(CliRunResult result) =>
+        string.IsNullOrWhiteSpace(result.ErrorMessage) ? $"SATL 操作失败，退出码 {result.ExitCode}。" : result.ErrorMessage;
+}

@@ -8,6 +8,9 @@ htmlcov/
 venv/
 build/
 dist/
+**/bin/
+**/obj/
+TestResults/
 *.spec
 *.zip
 *.sha256
