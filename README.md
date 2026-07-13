@@ -10,7 +10,7 @@
 [![系统](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4)](#系统要求)
 [![许可证](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-当前版本：**v0.2.0**
+当前版本：**v0.2.1**
 
 ## 下载与安装
 
@@ -18,8 +18,8 @@
 
 | 版本 | 适合谁 | 使用方法 |
 | --- | --- | --- |
-| `SATLInstaller-Setup-v0.2.0.exe` | 大多数用户，推荐 | 运行安装程序，之后从开始菜单打开 |
-| `SATLInstaller-Portable-v0.2.0.zip` | 不想安装或需要随身携带 | 解压完整 ZIP，再运行 `SATLInstaller.exe` |
+| `SATLInstaller-Setup-v0.2.1.exe` | 大多数用户，推荐 | 运行安装程序，之后从开始菜单打开 |
+| `SATLInstaller-Portable-v0.2.1.zip` | 不想安装或需要随身携带 | 解压完整 ZIP，再运行 `SATLInstaller.exe` |
 
 安装版和便携版功能相同。便携版不能只单独复制 EXE，必须保留解压后的全部文件。
 

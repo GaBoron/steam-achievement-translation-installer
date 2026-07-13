@@ -39,5 +39,6 @@ jobs:
         with:
           name: satl-win-x64
           path: |
-            dist/satl-win-x64.zip
-            dist/satl-win-x64.zip.sha256
+            dist/release/SATLInstaller-Setup-v*.exe
+            dist/release/SATLInstaller-Portable-v*.zip
+            dist/release/SHA256SUMS.txt
