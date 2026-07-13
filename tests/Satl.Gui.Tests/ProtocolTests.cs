@@ -70,6 +70,7 @@ public sealed class ProtocolTests
                 LoggingEnabled = false,
                 LogLevel = "detailed",
                 LogRetentionDays = 90,
+                LogWordWrap = false,
                 CheckForUpdatesOnStartup = true,
             });
 
@@ -81,6 +82,7 @@ public sealed class ProtocolTests
             Assert.False(loaded.LoggingEnabled);
             Assert.Equal("detailed", loaded.LogLevel);
             Assert.Equal(90, loaded.LogRetentionDays);
+            Assert.False(loaded.LogWordWrap);
             Assert.True(loaded.CheckForUpdatesOnStartup);
         }
         finally
@@ -90,6 +92,12 @@ public sealed class ProtocolTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void SettingsEnableLogWordWrapByDefault()
+    {
+        Assert.True(new GuiSettings().LogWordWrap);
     }
 
     [Fact]

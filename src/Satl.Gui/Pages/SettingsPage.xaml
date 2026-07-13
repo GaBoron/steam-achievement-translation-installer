@@ -128,6 +128,18 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center" Spacing="3">
+                            <TextBlock Text="自动换行" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="根据窗口宽度换行显示较长的日志内容。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ToggleSwitch x:Name="LogWordWrapSwitch" Grid.Column="1" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="LogWordWrapSwitch_Toggled" />
+                    </Grid>
+                    <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+                    <Grid Style="{StaticResource SettingsRowStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Spacing="3">
                             <TextBlock Text="保留时间" Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock Text="启动和设置变更时自动清理超过期限的日志。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                         </StackPanel>

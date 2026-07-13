@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from satl.steam import discover_accounts, discover_library_dirs, discover_local_games, steam_id32
+from satl.steam import (
+    _tasklist_contains_steam,
+    discover_accounts,
+    discover_library_dirs,
+    discover_local_games,
+    steam_id32,
+)
 from satl.vdf import parse_vdf
 
 
@@ -70,3 +76,9 @@ def test_account_filter_accepts_local_steam_id(tmp_path: Path) -> None:
     steam, _ = make_steam_tree(tmp_path)
     records = discover_local_games(steam, STEAM_ID)
     assert records["300"].accounts == {STEAM_ID}
+
+
+def test_tasklist_detection_does_not_decode_windows_code_page_bytes() -> None:
+    assert _tasklist_contains_steam(b"\xd0\x80 steam.exe \x81")
+    assert not _tasklist_contains_steam(b"\xd0\x80 explorer.exe \x81")
+    assert not _tasklist_contains_steam(None)

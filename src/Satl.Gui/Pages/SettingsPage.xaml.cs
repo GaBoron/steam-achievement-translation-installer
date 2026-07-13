@@ -33,6 +33,7 @@ public sealed partial class SettingsPage : Page
         LoggingSwitch.IsOn = ViewModel.Settings.LoggingEnabled;
         LogLevelBox.SelectedIndex = ViewModel.Settings.LogLevel == "detailed" ? 1 : 0;
         LogRetentionBox.SelectedIndex = ViewModel.Settings.LogRetentionDays switch { 7 => 0, 90 => 2, _ => 1 };
+        LogWordWrapSwitch.IsOn = ViewModel.Settings.LogWordWrap;
         UpdateCheckSwitch.IsOn = ViewModel.Settings.CheckForUpdatesOnStartup;
         UpdateStatusText.Text = $"当前版本 v{UpdateService.CurrentVersionText}。";
         AboutVersionText.Text = $"版本 {UpdateService.CurrentVersionText} · Windows 10/11 x64";
@@ -60,6 +61,7 @@ public sealed partial class SettingsPage : Page
                 LoggingEnabled = LoggingSwitch.IsOn,
                 LogLevel = logLevel,
                 LogRetentionDays = retention,
+                LogWordWrap = LogWordWrapSwitch.IsOn,
                 CheckForUpdatesOnStartup = UpdateCheckSwitch.IsOn,
             });
             RefreshDirectoryLabels();
@@ -158,6 +160,14 @@ public sealed partial class SettingsPage : Page
     private async void LogSettings_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_isInitializing && IsLoaded)
+        {
+            await ApplySettingsAsync();
+        }
+    }
+
+    private async void LogWordWrapSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_isInitializing)
         {
             await ApplySettingsAsync();
         }

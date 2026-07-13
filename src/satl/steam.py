@@ -66,13 +66,18 @@ def is_steam_running() -> bool:
             ["tasklist", "/FI", "IMAGENAME eq steam.exe", "/NH"],
             check=False,
             capture_output=True,
-            text=True,
+            text=False,
             timeout=5,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except (OSError, subprocess.SubprocessError):
         return False
-    return "steam.exe" in completed.stdout.casefold()
+    return _tasklist_contains_steam(completed.stdout)
+
+
+def _tasklist_contains_steam(stdout: bytes | None) -> bool:
+    """Check tasklist output without decoding the active Windows code page."""
+    return b"steam.exe" in (stdout or b"").lower()
 
 
 def discover_library_dirs(steam_dir: Path) -> tuple[Path, ...]:

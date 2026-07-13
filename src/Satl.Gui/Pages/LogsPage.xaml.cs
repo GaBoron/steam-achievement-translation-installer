@@ -14,9 +14,28 @@ public sealed partial class LogsPage : Page
         Loaded += LogsPage_Loaded;
     }
 
-    private async void LogsPage_Loaded(object sender, RoutedEventArgs e) => await RefreshAsync();
+    private async void LogsPage_Loaded(object sender, RoutedEventArgs e)
+    {
+        WordWrapButton.IsChecked = App.ViewModel.Settings.LogWordWrap;
+        ApplyWordWrap();
+        await RefreshAsync();
+    }
 
     private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshAsync();
+
+    private async void WordWrap_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyWordWrap();
+        App.ViewModel.Settings.LogWordWrap = WordWrapButton.IsChecked == true;
+        try
+        {
+            await App.ViewModel.UpdateSettingsAsync(App.ViewModel.Settings);
+        }
+        catch (Exception exception)
+        {
+            App.ViewModel.ShowInfo($"无法保存自动换行设置：{exception.Message}", InfoBarSeverity.Error);
+        }
+    }
 
     private void OpenDirectory_Click(object sender, RoutedEventArgs e)
     {
@@ -84,5 +103,14 @@ public sealed partial class LogsPage : Page
                 _allLogs.Split(["\r\n", "\n"], StringSplitOptions.None)
                     .Where(line => line.Contains(query, StringComparison.CurrentCultureIgnoreCase)));
         LogTextBox.Text = string.IsNullOrWhiteSpace(content) ? "暂无日志。" : content;
+    }
+
+    private void ApplyWordWrap()
+    {
+        var enabled = WordWrapButton.IsChecked == true;
+        LogTextBox.TextWrapping = enabled ? TextWrapping.Wrap : TextWrapping.NoWrap;
+        ScrollViewer.SetHorizontalScrollBarVisibility(
+            LogTextBox,
+            enabled ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto);
     }
 }

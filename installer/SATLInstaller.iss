@@ -31,7 +31,6 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog commandline
 OutputDir={#OutputRoot}
 OutputBaseFilename=SATLInstaller-Setup-v{#MyAppVersion}
 SetupIconFile={#MyAppIcon}
@@ -57,4 +56,4 @@ Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent runasoriginaluser
