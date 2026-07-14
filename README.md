@@ -10,8 +10,6 @@
 [![系统](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4)](#系统要求)
 [![许可证](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-当前版本：**v0.3.0**
-
 ## 下载与安装
 
 请只从 [GitHub Releases](https://github.com/GaBoron/steam-achievement-translation-installer/releases/latest) 下载。
