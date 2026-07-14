@@ -101,6 +101,12 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public void SettingsEnableUpdateChecksByDefault()
+    {
+        Assert.True(new GuiSettings().CheckForUpdatesOnStartup);
+    }
+
+    [Fact]
     public async Task LogServiceWritesFiltersAndClearsLogs()
     {
         var root = Path.Combine(Path.GetTempPath(), $"satl-log-test-{Guid.NewGuid():N}");

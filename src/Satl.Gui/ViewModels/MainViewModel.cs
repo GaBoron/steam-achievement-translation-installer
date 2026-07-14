@@ -226,6 +226,46 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    public async Task ExportPetitionAsync(string appId, string outputPath)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+        IsBusy = true;
+        IsInfoOpen = false;
+        try
+        {
+            var arguments = new List<string>
+            {
+                "petition",
+                "export",
+                appId,
+                "--output",
+                outputPath,
+                "--overwrite",
+                "--jsonl",
+            };
+            AddSteamDirectory(arguments);
+            var result = await RunCliAsync(arguments, $"正在导出 App ID {appId} 的翻译请愿文件…");
+            if (!result.IsSuccess)
+            {
+                ShowResultError(result);
+                return;
+            }
+            ShowInfo($"翻译请愿 ZIP 已导出：{outputPath}", InfoBarSeverity.Success);
+        }
+        catch (Exception exception)
+        {
+            ShowInfo(exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            StatusMessage = "准备就绪";
+            IsBusy = false;
+        }
+    }
+
     public Task<UpdateCheckResult?> CheckForUpdatesAsync() =>
         CheckForUpdatesCoreAsync(showCurrentResult: true);
 
@@ -446,10 +486,9 @@ public sealed class MainViewModel : ObservableObject
     private void AddCommonArguments(List<string> arguments, bool includeSteamDirectory, bool includeOffline)
     {
         AddDataDirectory(arguments);
-        if (includeSteamDirectory && !string.IsNullOrWhiteSpace(Settings.SteamDirectory))
+        if (includeSteamDirectory)
         {
-            arguments.Add("--steam-dir");
-            arguments.Add(Settings.SteamDirectory);
+            AddSteamDirectory(arguments);
         }
         if (includeOffline && Settings.Offline)
         {
@@ -463,6 +502,15 @@ public sealed class MainViewModel : ObservableObject
         {
             arguments.Add("--data-dir");
             arguments.Add(Settings.DataDirectory);
+        }
+    }
+
+    private void AddSteamDirectory(List<string> arguments)
+    {
+        if (!string.IsNullOrWhiteSpace(Settings.SteamDirectory))
+        {
+            arguments.Add("--steam-dir");
+            arguments.Add(Settings.SteamDirectory);
         }
     }
 

@@ -26,6 +26,7 @@
                     Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     AutomationProperties.Name="搜索游戏" />
             </CommandBar.Content>
+            <AppBarButton Icon="Help" Label="未找到游戏？" Click="Petition_Click" AutomationProperties.Name="打开翻译请愿" />
             <AppBarButton Icon="Refresh" Label="重新扫描" Click="Refresh_Click" />
             <AppBarButton Icon="Download" Label="安装所选" Click="Install_Click" />
         </CommandBar>

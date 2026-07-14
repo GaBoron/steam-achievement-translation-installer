@@ -10,7 +10,7 @@
 [![系统](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4)](#系统要求)
 [![许可证](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-当前版本：**v0.2.1**
+当前版本：**v0.3.0**
 
 ## 下载与安装
 
@@ -18,8 +18,8 @@
 
 | 版本 | 适合谁 | 使用方法 |
 | --- | --- | --- |
-| `SATLInstaller-Setup-v0.2.1.exe` | 大多数用户，推荐 | 运行安装程序，之后从开始菜单打开 |
-| `SATLInstaller-Portable-v0.2.1.zip` | 不想安装或需要随身携带 | 解压完整 ZIP，再运行 `SATLInstaller.exe` |
+| `SATLInstaller-Setup-v0.3.0.exe` | 大多数用户，推荐 | 运行安装程序，之后从开始菜单打开 |
+| `SATLInstaller-Portable-v0.3.0.zip` | 不想安装或需要随身携带 | 解压完整 ZIP，再运行 `SATLInstaller.exe` |
 
 安装版和便携版功能相同。便携版不能只单独复制 EXE，必须保留解压后的全部文件。
 
@@ -44,12 +44,23 @@
 - 浅色、深色和跟随系统主题。
 - 本地运行日志、保留期限和日志目录管理。
 - 从 GitHub Releases 检查新版本，并打开官方发布页下载。
+- 为尚未收录的游戏导出符合仓库要求的原始 schema ZIP，并直达翻译请愿表单。
 
 翻译数据来自 [Steam 成就翻译库](https://github.com/GaBoron/steam-achievement-translation-library)。安装器不会编辑翻译内容，也不会把你的 Steam 文件上传到网络。
 
+## 翻译请愿
+
+搜索页的“未找到游戏？”按钮会打开“翻译请愿”对话框：
+
+1. 从 Steam 商店地址中找到 `/app/` 后的数字，并填入 Steam App ID。
+2. 点击“导出”，选择保存位置。软件会自动查找原始 `UserGameStatsSchema_<app_id>.bin`，并生成只含该文件的同名 ZIP。
+3. 点击“提交请愿”打开翻译库表单，填写游戏名、商店地址和目标语言，再上传刚导出的 ZIP。
+
+导出过程不会修改 Steam 文件；写入采用临时文件、内容校验和原子替换，失败时不会留下不完整 ZIP。如果没有找到原始文件，请先启动对应游戏并让 Steam 读取一次成就。
+
 ## 更新检查
 
-“设置 → 软件更新”可以手动检查更新，也可以启用启动检查。软件只读取本项目公开的 GitHub Release 信息：
+“设置 → 软件更新”可以手动检查更新；启动检查默认开启，也可以随时关闭。软件只读取本项目公开的 GitHub Release 信息：
 
 - 有新版本时显示版本号，并提供官方 Release 下载页。
 - 没有新版本时显示当前已是最新版。

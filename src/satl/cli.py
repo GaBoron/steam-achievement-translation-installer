@@ -11,6 +11,7 @@ from satl import __version__
 from satl.catalog import CatalogRepository
 from satl.errors import CatalogError, PreflightError, SatlError, TransactionError, UsageError
 from satl.models import Catalog, CatalogEntry, SchemaVariant
+from satl.petition import export_petition_archive
 from satl.state import StateStore
 from satl.steam import discover_local_games, find_steam_dir, is_steam_running, schema_target
 from satl.transaction import TransactionManager
@@ -85,6 +86,20 @@ def build_parser() -> argparse.ArgumentParser:
     _add_data_dir(refresh)
     refresh.add_argument("--jsonl", action="store_true", help="输出供桌面应用使用的 JSON Lines 事件")
     refresh.set_defaults(handler=command_cache_refresh)
+
+    petition = subparsers.add_parser("petition", help="导出并提交翻译请愿")
+    petition_subparsers = petition.add_subparsers(dest="petition_command", required=True)
+    petition_export = petition_subparsers.add_parser(
+        "export", help="按翻译请愿模板导出原始 schema ZIP"
+    )
+    _add_steam_dir(petition_export)
+    petition_export.add_argument("app_id", metavar="APP_ID")
+    petition_export.add_argument("--output", type=Path, required=True, help="ZIP 保存路径")
+    petition_export.add_argument("--overwrite", action="store_true", help="覆盖已确认的目标文件")
+    petition_export.add_argument(
+        "--jsonl", action="store_true", help="输出供桌面应用使用的 JSON Lines 事件"
+    )
+    petition_export.set_defaults(handler=command_petition_export)
     return parser
 
 
@@ -513,10 +528,33 @@ def command_cache_refresh(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_petition_export(args: argparse.Namespace) -> int:
+    app_id = _validated_app_ids([args.app_id])[0]
+    steam_dir = find_steam_dir(args.steam_dir)
+    source, destination, byte_count = export_petition_archive(
+        steam_dir,
+        app_id,
+        args.output,
+        overwrite=args.overwrite,
+    )
+    payload = {
+        "app_id": app_id,
+        "source": str(source),
+        "output": str(destination),
+        "file_size_bytes": byte_count,
+        "exit_code": 0,
+    }
+    if args.jsonl:
+        _emit_jsonl("petition-export", "completed", payload)
+    else:
+        print(f"已导出翻译请愿 ZIP：{destination}")
+    return 0
+
+
 def _validated_app_ids(values: Sequence[str]) -> list[str]:
     unique: set[str] = set()
     for value in values:
-        if not value.isdigit():
+        if not value.isdigit() or len(value) > 20 or int(value) <= 0:
             raise UsageError(f"无效的 Steam App ID：{value}")
         unique.add(value)
     return sorted(unique, key=int)
@@ -530,7 +568,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return int(args.handler(args))
     except SatlError as exc:
         if args is not None and getattr(args, "jsonl", False):
-            operation = "cache-refresh" if getattr(args, "command", None) == "cache" else str(args.command)
+            operation = {
+                "cache": "cache-refresh",
+                "petition": "petition-export",
+            }.get(getattr(args, "command", None), str(args.command))
             _emit_jsonl(operation, "error", {"message": str(exc), "exit_code": exc.exit_code})
         else:
             print(f"错误：{exc}", file=sys.stderr)

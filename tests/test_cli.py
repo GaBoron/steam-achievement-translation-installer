@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -405,3 +406,109 @@ def test_invalid_status_and_restore_ids_return_usage_error(tmp_path: Path, capsy
         ]
     ) == 2
     assert "无效" in capsys.readouterr().err
+
+
+def test_petition_export_creates_exact_template_zip(tmp_path: Path, capsys) -> None:
+    steam, _ = make_fixture(tmp_path)
+    schema = steam / "appcache" / "stats" / "UserGameStatsSchema_123.bin"
+    schema.parent.mkdir(parents=True)
+    schema.write_bytes(b"original-steam-schema")
+    output = tmp_path / "exports" / "UserGameStatsSchema_123.zip"
+
+    result = main(
+        [
+            "petition",
+            "export",
+            "123",
+            "--steam-dir",
+            str(steam),
+            "--output",
+            str(output),
+            "--jsonl",
+        ]
+    )
+
+    assert result == 0
+    events = jsonl_events(capsys.readouterr().out)
+    assert [event["event"] for event in events] == ["completed"]
+    assert events[0]["operation"] == "petition-export"
+    assert events[0]["payload"]["output"] == str(output.resolve())
+    with zipfile.ZipFile(output) as archive:
+        assert archive.namelist() == ["UserGameStatsSchema_123.bin"]
+        assert archive.read("UserGameStatsSchema_123.bin") == b"original-steam-schema"
+
+
+def test_petition_export_refuses_missing_source_and_existing_output(tmp_path: Path, capsys) -> None:
+    steam, _ = make_fixture(tmp_path)
+    output = tmp_path / "UserGameStatsSchema_123.zip"
+
+    missing_result = main(
+        [
+            "petition",
+            "export",
+            "123",
+            "--steam-dir",
+            str(steam),
+            "--output",
+            str(output),
+            "--jsonl",
+        ]
+    )
+    assert missing_result == 3
+    missing_events = jsonl_events(capsys.readouterr().out)
+    assert missing_events[-1]["operation"] == "petition-export"
+    assert "未找到" in missing_events[-1]["payload"]["message"]
+    assert not output.exists()
+
+    schema = steam / "appcache" / "stats" / "UserGameStatsSchema_123.bin"
+    schema.parent.mkdir(parents=True)
+    schema.write_bytes(b"original")
+    output.write_bytes(b"keep-me")
+    existing_result = main(
+        [
+            "petition",
+            "export",
+            "123",
+            "--steam-dir",
+            str(steam),
+            "--output",
+            str(output),
+        ]
+    )
+    assert existing_result == 2
+    assert "--overwrite" in capsys.readouterr().err
+    assert output.read_bytes() == b"keep-me"
+
+
+def test_petition_export_rejects_invalid_id_and_filename(tmp_path: Path, capsys) -> None:
+    steam, _ = make_fixture(tmp_path)
+    schema = steam / "appcache" / "stats" / "UserGameStatsSchema_123.bin"
+    schema.parent.mkdir(parents=True)
+    schema.write_bytes(b"original")
+
+    assert main(
+        [
+            "petition",
+            "export",
+            "0",
+            "--steam-dir",
+            str(steam),
+            "--output",
+            str(tmp_path / "UserGameStatsSchema_0.zip"),
+        ]
+    ) == 2
+    assert "无效" in capsys.readouterr().err
+
+    assert main(
+        [
+            "petition",
+            "export",
+            "123",
+            "--steam-dir",
+            str(steam),
+            "--output",
+            str(tmp_path / "renamed.zip"),
+        ]
+    ) == 2
+    assert "文件名必须" in capsys.readouterr().err
+    assert not (tmp_path / "renamed.zip").exists()
