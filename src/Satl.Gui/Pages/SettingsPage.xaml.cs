@@ -31,7 +31,7 @@ public sealed partial class SettingsPage : Page
         OfflineSwitch.IsOn = ViewModel.Settings.Offline;
         ThemeBox.SelectedIndex = ViewModel.Settings.Theme switch { "light" => 1, "dark" => 2, _ => 0 };
         LoggingSwitch.IsOn = ViewModel.Settings.LoggingEnabled;
-        LogLevelBox.SelectedIndex = ViewModel.Settings.LogLevel == "detailed" ? 1 : 0;
+        LogLevelBox.SelectedIndex = ViewModel.Settings.LogLevel switch { "detailed" => 1, "debug" => 2, _ => 0 };
         LogRetentionBox.SelectedIndex = ViewModel.Settings.LogRetentionDays switch { 7 => 0, 90 => 2, _ => 1 };
         LogWordWrapSwitch.IsOn = ViewModel.Settings.LogWordWrap;
         UpdateCheckSwitch.IsOn = ViewModel.Settings.CheckForUpdatesOnStartup;
@@ -68,6 +68,7 @@ public sealed partial class SettingsPage : Page
         }
         catch (Exception exception)
         {
+            _ = App.Logs.WriteAsync("调试", "设置", exception.ToString(), debug: true);
             ViewModel.ShowInfo($"无法应用设置：{exception.Message}", InfoBarSeverity.Error);
         }
         finally
@@ -161,8 +162,48 @@ public sealed partial class SettingsPage : Page
     {
         if (!_isInitializing && IsLoaded)
         {
+            var level = (LogLevelBox.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+            if (level == "debug" && !await ConfirmDebugModeAsync())
+            {
+                _isInitializing = true;
+                LogLevelBox.SelectedIndex = ViewModel.Settings.LogLevel == "detailed" ? 1 : 0;
+                _isInitializing = false;
+                return;
+            }
             await ApplySettingsAsync();
         }
+    }
+
+    private async Task<bool> ConfirmDebugModeAsync()
+    {
+        var content = new StackPanel { Spacing = 12, MaxWidth = 480 };
+        content.Children.Add(new TextBlock
+        {
+            Text = "Debug 仅用于复现和追踪难以定位的软件问题。它会尽可能记录每次操作的参数、执行步骤、CLI 原始事件、耗时、标准错误和完整异常信息。",
+            TextWrapping = TextWrapping.Wrap,
+        });
+        content.Children.Add(new TextBlock
+        {
+            Text = "可能的后果：日志会包含本机目录、Steam 路径、App ID、游戏名和文件诊断信息；日志体积会明显增长，并可能带来轻微性能开销。发送日志前请先检查并删除不希望分享的内容。Debug 不记录成就文件正文。",
+            TextWrapping = TextWrapping.Wrap,
+        });
+        content.Children.Add(new TextBlock
+        {
+            Text = "Debug 只在本次软件运行期间有效。关闭并重新打开软件后会自动恢复为“详尽”。",
+            TextWrapping = TextWrapping.Wrap,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        });
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "确认开启 Debug 日志",
+            Content = content,
+            PrimaryButtonText = "仍要开启",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
     }
 
     private async void LogWordWrapSwitch_Toggled(object sender, RoutedEventArgs e)

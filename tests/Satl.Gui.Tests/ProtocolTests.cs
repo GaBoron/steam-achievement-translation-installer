@@ -95,6 +95,28 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public async Task SettingsNeverPersistDebugModeAcrossRestarts()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"satl-gui-test-{Guid.NewGuid():N}");
+        var path = Path.Combine(root, "settings.json");
+        try
+        {
+            var service = new SettingsService(path);
+            await service.SaveAsync(new GuiSettings { LogLevel = "debug" });
+
+            Assert.Equal("detailed", (await service.LoadAsync()).LogLevel);
+            Assert.DoesNotContain("debug", await File.ReadAllTextAsync(path), StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void SettingsEnableLogWordWrapByDefault()
     {
         Assert.True(new GuiSettings().LogWordWrap);
@@ -116,17 +138,56 @@ public sealed class ProtocolTests
             service.Configure(enabled: true, level: "detailed", retentionDays: 30);
             await service.WriteAsync("信息", "测试", "标准记录");
             await service.WriteAsync("详细", "测试", "详细记录", detailed: true);
+            await service.WriteAsync("调试", "测试", "调试记录", debug: true);
 
             var content = await service.ReadRecentAsync();
 
             Assert.Contains("标准记录", content);
             Assert.Contains("详细记录", content);
+            Assert.DoesNotContain("调试记录", content);
+            service.Configure(enabled: true, level: "debug", retentionDays: 30);
+            Assert.True(service.IsDebugEnabled);
+            await service.WriteAsync("调试", "测试", "调试记录", debug: true);
+            Assert.Contains("调试记录", await service.ReadRecentAsync());
             service.Configure(enabled: false, level: "detailed", retentionDays: 30);
+            Assert.False(service.IsDebugEnabled);
             await service.WriteAsync("信息", "测试", "不应写入");
             Assert.DoesNotContain("不应写入", await service.ReadRecentAsync());
 
             await service.ClearAsync();
             Assert.Equal(string.Empty, await service.ReadRecentAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task LogServiceAppliesAllThreeVerbosityThresholds()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"satl-log-test-{Guid.NewGuid():N}");
+        try
+        {
+            var service = new LogService(root);
+            service.Configure(enabled: true, level: "standard", retentionDays: 30);
+            await service.WriteAsync("信息", "测试", "普通可见");
+            await service.WriteAsync("详细", "测试", "详尽隐藏", detailed: true);
+            await service.WriteAsync("调试", "测试", "调试隐藏", debug: true);
+            var standard = await service.ReadRecentAsync();
+            Assert.Contains("普通可见", standard);
+            Assert.DoesNotContain("详尽隐藏", standard);
+            Assert.DoesNotContain("调试隐藏", standard);
+
+            service.Configure(enabled: true, level: "detailed", retentionDays: 30);
+            await service.WriteAsync("详细", "测试", "详尽可见", detailed: true);
+            await service.WriteAsync("调试", "测试", "调试仍隐藏", debug: true);
+            var detailed = await service.ReadRecentAsync();
+            Assert.Contains("详尽可见", detailed);
+            Assert.DoesNotContain("调试仍隐藏", detailed);
         }
         finally
         {

@@ -19,10 +19,12 @@ public sealed class LogService
 
     public string DirectoryPath { get; }
 
+    public bool IsDebugEnabled => _enabled && _level == "debug";
+
     public void Configure(bool enabled, string level, int retentionDays)
     {
         _enabled = enabled;
-        _level = level == "detailed" ? "detailed" : "standard";
+        _level = level is "detailed" or "debug" ? level : "standard";
         _retentionDays = retentionDays is 7 or 30 or 90 ? retentionDays : 30;
         _ = PruneAsync();
     }
@@ -31,9 +33,12 @@ public sealed class LogService
         string level,
         string category,
         string message,
-        bool detailed = false)
+        bool detailed = false,
+        bool debug = false)
     {
-        if (!_enabled || (detailed && _level != "detailed"))
+        if (!_enabled
+            || (debug && _level != "debug")
+            || (detailed && _level is not ("detailed" or "debug")))
         {
             return;
         }

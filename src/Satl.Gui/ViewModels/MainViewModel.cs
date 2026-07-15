@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -110,7 +111,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            ShowInfo(exception.Message, InfoBarSeverity.Error);
+            ShowException("扫描", exception);
         }
         finally
         {
@@ -146,7 +147,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            ShowInfo(exception.Message, InfoBarSeverity.Error);
+            ShowException("安装", exception);
         }
         finally
         {
@@ -184,7 +185,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            ShowInfo(exception.Message, InfoBarSeverity.Error);
+            ShowException("恢复", exception);
         }
         finally
         {
@@ -217,7 +218,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            ShowInfo(exception.Message, InfoBarSeverity.Error);
+            ShowException("刷新缓存", exception);
         }
         finally
         {
@@ -257,7 +258,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            ShowInfo(exception.Message, InfoBarSeverity.Error);
+            ShowException("导出请愿文件", exception);
         }
         finally
         {
@@ -278,11 +279,23 @@ public sealed class MainViewModel : ObservableObject
         IsBusy = true;
         IsInfoOpen = false;
         StatusMessage = "正在检查软件更新…";
+        var stopwatch = Stopwatch.StartNew();
+        await App.Logs.WriteAsync(
+            "调试",
+            "更新",
+            $"开始检查更新。手动显示当前结果={showCurrentResult}；当前版本={UpdateService.CurrentVersionText}。",
+            debug: true);
         try
         {
             var result = await _updateService.CheckAsync();
             LatestReleasePage = result.ReleasePage;
             await App.Logs.WriteAsync("信息", "更新", result.Message);
+            await App.Logs.WriteAsync(
+                "调试",
+                "更新",
+                $"更新检查完成。耗时={stopwatch.ElapsedMilliseconds} ms；当前={result.CurrentVersion}；最新={result.LatestVersion}；" +
+                $"有更新={result.IsUpdateAvailable}；发布页={result.ReleasePage}。",
+                debug: true);
             if (result.IsUpdateAvailable || showCurrentResult)
             {
                 ShowInfo(
@@ -295,6 +308,11 @@ public sealed class MainViewModel : ObservableObject
         {
             var message = $"无法检查软件更新：{exception.Message}";
             await App.Logs.WriteAsync("警告", "更新", message);
+            await App.Logs.WriteAsync(
+                "调试",
+                "更新",
+                $"更新检查异常。耗时={stopwatch.ElapsedMilliseconds} ms。{exception}",
+                debug: true);
             if (showCurrentResult)
             {
                 ShowInfo(message, InfoBarSeverity.Warning);
@@ -310,12 +328,31 @@ public sealed class MainViewModel : ObservableObject
 
     public async Task UpdateSettingsAsync(GuiSettings settings)
     {
-        Settings = settings;
+        var previous = Settings;
+        var enablingDebug = settings.LoggingEnabled
+            && settings.LogLevel == "debug"
+            && (!previous.LoggingEnabled || previous.LogLevel != "debug");
+        await App.Logs.WriteAsync(
+            "调试",
+            "设置",
+            $"准备保存设置。原设置={DescribeSettings(previous)}；新设置={DescribeSettings(settings)}。",
+            debug: true);
         await _settingsService.SaveAsync(settings);
+        Settings = settings;
         OnPropertyChanged(nameof(Settings));
         OnPropertyChanged(nameof(CurrentSteamDirectory));
         OnPropertyChanged(nameof(CurrentDataDirectory));
         App.Logs.Configure(settings.LoggingEnabled, settings.LogLevel, settings.LogRetentionDays);
+        if (enablingDebug)
+        {
+            await WriteDebugSessionHeaderAsync();
+        }
+        await App.Logs.WriteAsync(
+            "调试",
+            "设置",
+            $"设置已应用。运行时日志级别={settings.LogLevel}；持久化日志级别=" +
+            $"{(settings.LogLevel == "debug" ? "detailed（重启后自动恢复）" : settings.LogLevel)}。",
+            debug: true);
         ApplyTheme();
     }
 
@@ -324,6 +361,7 @@ public sealed class MainViewModel : ObservableObject
         InfoMessage = message;
         InfoSeverity = severity;
         IsInfoOpen = true;
+        _ = App.Logs.WriteAsync("调试", "界面", $"显示 InfoBar。严重性={severity}；消息={message}", debug: true);
         if (severity is InfoBarSeverity.Error or InfoBarSeverity.Warning)
         {
             _ = App.Logs.WriteAsync(severity == InfoBarSeverity.Error ? "错误" : "警告", "界面", message);
@@ -350,7 +388,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            ShowInfo(exception.Message, InfoBarSeverity.Error);
+            ShowException("预览", exception);
             return null;
         }
         finally
@@ -415,24 +453,55 @@ public sealed class MainViewModel : ObservableObject
     {
         StatusMessage = status;
         var operation = arguments.FirstOrDefault() ?? "unknown";
+        var stopwatch = Stopwatch.StartNew();
         await App.Logs.WriteAsync("信息", operation, $"开始：{status}");
-        var result = await _cli.RunAsync(arguments, satlEvent =>
+        await App.Logs.WriteAsync(
+            "调试",
+            operation,
+            $"GUI 已提交 CLI 操作。状态文本={status}；参数数量={arguments.Count}。",
+            debug: true);
+        var diagnosticWrites = new List<Task>();
+        Action<string>? diagnostic = App.Logs.IsDebugEnabled
+            ? message => diagnosticWrites.Add(App.Logs.WriteAsync("调试", operation, message, debug: true))
+            : null;
+        CliRunResult result;
+        try
         {
-            _ = App.Logs.WriteAsync("详细", satlEvent.Operation, DescribeEvent(satlEvent), detailed: true);
-            if (satlEvent.Event == "item-started" && satlEvent.Payload.TryGetProperty("app_id", out var appId))
+            result = await _cli.RunAsync(arguments, satlEvent =>
             {
-                App.DispatcherQueue.TryEnqueue(() => StatusMessage = $"正在处理 App ID {appId.GetString()}…");
-            }
-            else if (satlEvent.Event == "warning" && satlEvent.Payload.TryGetProperty("message", out var warning))
-            {
-                App.DispatcherQueue.TryEnqueue(() => ShowInfo(warning.GetString() ?? "正在使用本地缓存。"));
-            }
-        });
+                _ = App.Logs.WriteAsync("详细", satlEvent.Operation, DescribeEvent(satlEvent), detailed: true);
+                if (satlEvent.Event == "item-started" && satlEvent.Payload.TryGetProperty("app_id", out var appId))
+                {
+                    App.DispatcherQueue.TryEnqueue(() => StatusMessage = $"正在处理 App ID {appId.GetString()}…");
+                }
+                else if (satlEvent.Event == "warning" && satlEvent.Payload.TryGetProperty("message", out var warning))
+                {
+                    App.DispatcherQueue.TryEnqueue(() => ShowInfo(warning.GetString() ?? "正在使用本地缓存。"));
+                }
+            }, diagnostic);
+        }
+        catch (Exception exception)
+        {
+            await Task.WhenAll(diagnosticWrites);
+            await App.Logs.WriteAsync(
+                "调试",
+                operation,
+                $"CLI 调用抛出异常。耗时={stopwatch.ElapsedMilliseconds} ms。{exception}",
+                debug: true);
+            throw;
+        }
+        await Task.WhenAll(diagnosticWrites);
         await App.Logs.WriteAsync(
             result.IsSuccess ? "信息" : "错误",
             operation,
             $"完成：退出码 {result.ExitCode}，事件 {result.Events.Count} 个。" +
             (string.IsNullOrWhiteSpace(result.StandardError) ? string.Empty : $" 标准错误：{result.StandardError}"));
+        await App.Logs.WriteAsync(
+            "调试",
+            operation,
+            $"CLI 操作返回 GUI。成功={result.IsSuccess}；耗时={stopwatch.ElapsedMilliseconds} ms；" +
+            $"错误消息={result.ErrorMessage}。",
+            debug: true);
         return result;
     }
 
@@ -559,6 +628,30 @@ public sealed class MainViewModel : ObservableObject
             ? $"：{messageValue.GetString()}"
             : string.Empty;
         return $"事件 {satlEvent.Event}{appId}{variant}{message}";
+    }
+
+    private async Task WriteDebugSessionHeaderAsync()
+    {
+        await App.Logs.WriteAsync(
+            "调试",
+            "Debug",
+            $"Debug 会话已开启。会话 ID={Guid.NewGuid():N}；进程 ID={Environment.ProcessId}；" +
+            $"应用版本={UpdateService.CurrentVersionText}；OS={Environment.OSVersion}；" +
+            $".NET={Environment.Version}；程序目录={AppContext.BaseDirectory}；日志目录={App.Logs.DirectoryPath}；" +
+            $"当前设置={DescribeSettings(Settings)}。Debug 仅本次运行有效。",
+            debug: true);
+    }
+
+    private static string DescribeSettings(GuiSettings settings) =>
+        $"SteamDirectory={settings.SteamDirectory}; DataDirectory={settings.DataDirectory}; Offline={settings.Offline}; " +
+        $"Theme={settings.Theme}; LoggingEnabled={settings.LoggingEnabled}; LogLevel={settings.LogLevel}; " +
+        $"LogRetentionDays={settings.LogRetentionDays}; LogWordWrap={settings.LogWordWrap}; " +
+        $"CheckForUpdatesOnStartup={settings.CheckForUpdatesOnStartup}";
+
+    private void ShowException(string operation, Exception exception)
+    {
+        _ = App.Logs.WriteAsync("调试", operation, exception.ToString(), debug: true);
+        ShowInfo(exception.Message, InfoBarSeverity.Error);
     }
 
     private void ShowResultError(CliRunResult result) => ShowInfo(ResultError(result), InfoBarSeverity.Error);

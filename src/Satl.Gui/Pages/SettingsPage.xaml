@@ -114,11 +114,12 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center" Spacing="3">
                             <TextBlock Text="详细程度" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <TextBlock Text="标准模式记录操作结果；详细模式额外记录 CLI 事件。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                            <TextBlock Text="普通记录结果，详尽增加 CLI 事件；Debug 记录逐步诊断且仅本次运行有效。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                         </StackPanel>
                         <ComboBox x:Name="LogLevelBox" Grid.Column="1" Width="160" VerticalAlignment="Center" SelectedIndex="0" SelectionChanged="LogSettings_SelectionChanged">
-                            <ComboBoxItem Content="标准" Tag="standard" />
-                            <ComboBoxItem Content="详细" Tag="detailed" />
+                            <ComboBoxItem Content="普通" Tag="standard" />
+                            <ComboBoxItem Content="详尽" Tag="detailed" />
+                            <ComboBoxItem Content="Debug" Tag="debug" />
                         </ComboBox>
                     </Grid>
                     <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />

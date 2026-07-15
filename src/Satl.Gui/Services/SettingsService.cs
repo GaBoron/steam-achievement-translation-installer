@@ -27,7 +27,9 @@ public sealed class SettingsService
         try
         {
             await using var stream = File.OpenRead(_path);
-            return await JsonSerializer.DeserializeAsync<GuiSettings>(stream) ?? new GuiSettings();
+            var settings = await JsonSerializer.DeserializeAsync<GuiSettings>(stream) ?? new GuiSettings();
+            settings.LogLevel = PersistentLogLevel(settings.LogLevel);
+            return settings;
         }
         catch (JsonException)
         {
@@ -48,7 +50,22 @@ public sealed class SettingsService
         {
             await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                await JsonSerializer.SerializeAsync(stream, settings, new JsonSerializerOptions { WriteIndented = true });
+                var persistentSettings = new GuiSettings
+                {
+                    SteamDirectory = settings.SteamDirectory,
+                    DataDirectory = settings.DataDirectory,
+                    Offline = settings.Offline,
+                    Theme = settings.Theme,
+                    LoggingEnabled = settings.LoggingEnabled,
+                    LogLevel = PersistentLogLevel(settings.LogLevel),
+                    LogRetentionDays = settings.LogRetentionDays,
+                    LogWordWrap = settings.LogWordWrap,
+                    CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup,
+                };
+                await JsonSerializer.SerializeAsync(
+                    stream,
+                    persistentSettings,
+                    new JsonSerializerOptions { WriteIndented = true });
                 await stream.FlushAsync();
             }
             File.Move(temporary, _path, true);
@@ -58,4 +75,11 @@ public sealed class SettingsService
             File.Delete(temporary);
         }
     }
+
+    private static string PersistentLogLevel(string level) => level switch
+    {
+        "detailed" => "detailed",
+        "debug" => "detailed",
+        _ => "standard",
+    };
 }
