@@ -75,21 +75,16 @@ public sealed class LogService
                 return string.Empty;
             }
 
-            var files = Directory.EnumerateFiles(DirectoryPath, "satl-gui-*.log")
+            var latestFile = Directory.EnumerateFiles(DirectoryPath, "satl-gui-*.log")
                 .OrderByDescending(path => path, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            var output = new List<string>();
-            foreach (var file in files)
+                .FirstOrDefault();
+            if (latestFile is null)
             {
-                var lines = await File.ReadAllLinesAsync(file, Encoding.UTF8);
-                var remaining = maximumLines - output.Count;
-                if (remaining <= 0)
-                {
-                    break;
-                }
-                output.AddRange(lines.TakeLast(remaining));
+                return string.Empty;
             }
-            return string.Join(Environment.NewLine, output);
+
+            var lines = await File.ReadAllLinesAsync(latestFile, Encoding.UTF8);
+            return string.Join(Environment.NewLine, lines.TakeLast(Math.Max(0, maximumLines)));
         }
         finally
         {

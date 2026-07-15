@@ -1,5 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Windowing;
+using Satl_Gui.Services;
 using Windows.Graphics;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -14,12 +16,15 @@ namespace Satl_Gui;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
+    private readonly WindowPlacementService _windowPlacement = new();
+
     public MainWindow()
     {
         InitializeComponent();
 
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
-        AppWindow.Resize(new SizeInt32(1120, 760));
+        RestoreWindowPlacement();
+        AppWindow.Closing += AppWindow_Closing;
         try
         {
             SystemBackdrop = new MicaBackdrop();
@@ -33,6 +38,37 @@ public sealed partial class MainWindow : Window
         RootFrame.Navigate(typeof(MainPage));
         RootFrame.ActualThemeChanged += (_, _) => ApplyTitleBarTheme(RootFrame.ActualTheme);
         ApplyTitleBarTheme(RootFrame.ActualTheme);
+    }
+
+    private void RestoreWindowPlacement()
+    {
+        var saved = _windowPlacement.Load();
+        var displayArea = saved is null
+            ? DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary)
+            : DisplayArea.GetFromPoint(
+                new PointInt32(saved.X, saved.Y),
+                DisplayAreaFallback.Primary);
+        var workArea = displayArea.WorkArea;
+        var placement = saved is null
+            ? WindowPlacementService.CenterDefault(workArea.X, workArea.Y, workArea.Width, workArea.Height)
+            : WindowPlacementService.FitToWorkArea(
+                saved,
+                workArea.X,
+                workArea.Y,
+                workArea.Width,
+                workArea.Height);
+        AppWindow.MoveAndResize(new RectInt32(
+            placement.X,
+            placement.Y,
+            placement.Width,
+            placement.Height));
+    }
+
+    private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        var position = sender.Position;
+        var size = sender.Size;
+        _windowPlacement.Save(new WindowPlacement(position.X, position.Y, size.Width, size.Height));
     }
 
     public void ApplyTitleBarTheme(ElementTheme theme)

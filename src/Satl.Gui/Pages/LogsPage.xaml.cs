@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 
 namespace Satl_Gui.Pages;
 
@@ -81,6 +82,41 @@ public sealed partial class LogsPage : Page
                 _allLogs.Split(["\r\n", "\n"], StringSplitOptions.None)
                     .Where(line => line.Contains(query, StringComparison.CurrentCultureIgnoreCase)));
         LogTextBox.Text = string.IsNullOrWhiteSpace(content) ? "暂无日志。" : content;
+        ScrollToLatest();
+    }
+
+    private void ScrollToLatest()
+    {
+        LogTextBox.Select(LogTextBox.Text.Length, 0);
+        LogTextBox.DispatcherQueue.TryEnqueue(() =>
+        {
+            LogTextBox.UpdateLayout();
+            FindScrollViewer(LogTextBox)?.ChangeView(
+                horizontalOffset: null,
+                verticalOffset: double.MaxValue,
+                zoomFactor: null,
+                disableAnimation: true);
+        });
+    }
+
+    private static ScrollViewer? FindScrollViewer(DependencyObject element)
+    {
+        var childCount = VisualTreeHelper.GetChildrenCount(element);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(element, index);
+            if (child is ScrollViewer scrollViewer)
+            {
+                return scrollViewer;
+            }
+
+            if (FindScrollViewer(child) is { } descendant)
+            {
+                return descendant;
+            }
+        }
+
+        return null;
     }
 
     private void ApplyWordWrap(bool enabled)
