@@ -8,11 +8,40 @@ namespace Satl_Gui.Services;
 
 public static class ReplacementConfirmationDialog
 {
-    private static readonly GridLength IndexWidth = new(54);
-    private static readonly GridLength ApiNameWidth = new(180);
-    private static readonly GridLength NameWidth = new(220);
-    private static readonly GridLength DescriptionWidth = new(320);
-    private static readonly GridLength OtherWidth = new(360);
+    private static readonly IReadOnlyDictionary<string, string> LanguageNames =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["schinese"] = "简体中文",
+            ["tchinese"] = "繁体中文",
+            ["english"] = "英语",
+            ["japanese"] = "日语",
+            ["koreana"] = "韩语",
+            ["french"] = "法语",
+            ["italian"] = "意大利语",
+            ["german"] = "德语",
+            ["spanish"] = "西班牙语",
+            ["latam"] = "拉丁美洲西班牙语",
+            ["russian"] = "俄语",
+            ["thai"] = "泰语",
+            ["portuguese"] = "葡萄牙语",
+            ["brazilian"] = "巴西葡萄牙语",
+            ["polish"] = "波兰语",
+            ["danish"] = "丹麦语",
+            ["dutch"] = "荷兰语",
+            ["finnish"] = "芬兰语",
+            ["norwegian"] = "挪威语",
+            ["swedish"] = "瑞典语",
+            ["czech"] = "捷克语",
+            ["hungarian"] = "匈牙利语",
+            ["romanian"] = "罗马尼亚语",
+            ["turkish"] = "土耳其语",
+            ["ukrainian"] = "乌克兰语",
+            ["vietnamese"] = "越南语",
+            ["indonesian"] = "印度尼西亚语",
+            ["arabic"] = "阿拉伯语",
+            ["bulgarian"] = "保加利亚语",
+            ["greek"] = "希腊语",
+        };
 
     public static async Task<bool> ShowAsync(
         XamlRoot xamlRoot,
@@ -26,6 +55,7 @@ public static class ReplacementConfirmationDialog
         }
 
         var page = 0;
+        var selectedLanguages = new Dictionary<int, string>();
         var heading = new TextBlock
         {
             Style = Application.Current.Resources["SubtitleTextBlockStyle"] as Style,
@@ -33,16 +63,46 @@ public static class ReplacementConfirmationDialog
         };
         var explanation = new TextBlock
         {
-            Text = "下表来自即将写入的 BIN 文件，并已通过 Binary KeyValues 字节级 roundtrip 校验。空白表示文件中没有该语言字段。",
+            Text = "下表来自即将写入的 BIN 文件，并已通过 Binary KeyValues 字节级 roundtrip 校验。语言列表由该 BIN 的名称和说明字段自动扫描生成。",
             TextWrapping = TextWrapping.Wrap,
             Foreground = Application.Current.Resources["TextFillColorSecondaryBrush"] as Brush,
         };
-        var tableHost = new Grid { MinHeight = 360 };
+        var languageBox = new ComboBox
+        {
+            MinWidth = 220,
+            DisplayMemberPath = nameof(LanguageOption.DisplayName),
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        AutomationProperties.SetName(languageBox, "选择成就显示语言");
+        var languageBar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        languageBar.Children.Add(new TextBlock
+        {
+            Text = "显示语言",
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        languageBar.Children.Add(languageBox);
+
+        var tableHost = new Grid();
         var previous = new Button { Content = "上一页" };
         var next = new Button { Content = "下一页" };
         var pageText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         AutomationProperties.SetName(previous, "显示上一个游戏");
         AutomationProperties.SetName(next, "显示下一个游戏");
+
+        void RenderTable()
+        {
+            var preview = previews[page];
+            var language = selectedLanguages.TryGetValue(page, out var selected)
+                ? selected
+                : preview.DefaultLanguage;
+            tableHost.Children.Clear();
+            tableHost.Children.Add(BuildTable(preview, language));
+        }
 
         void RenderPage()
         {
@@ -53,10 +113,32 @@ public static class ReplacementConfirmationDialog
             pageText.Text = $"第 {page + 1} / {previews.Count} 页";
             previous.IsEnabled = page > 0;
             next.IsEnabled = page + 1 < previews.Count;
-            tableHost.Children.Clear();
-            tableHost.Children.Add(BuildTable(preview));
+
+            var options = preview.Languages
+                .Select(code => new LanguageOption(code, DisplayLanguage(code)))
+                .ToList();
+            languageBar.Visibility = preview.DeletesTarget || options.Count == 0
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+            languageBox.ItemsSource = options;
+            var selected = selectedLanguages.TryGetValue(page, out var remembered)
+                && options.Any(option => option.Code.Equals(remembered, StringComparison.OrdinalIgnoreCase))
+                    ? remembered
+                    : preview.DefaultLanguage;
+            selectedLanguages[page] = selected;
+            languageBox.SelectedItem = options.FirstOrDefault(
+                option => option.Code.Equals(selected, StringComparison.OrdinalIgnoreCase));
+            RenderTable();
         }
 
+        languageBox.SelectionChanged += (_, _) =>
+        {
+            if (languageBox.SelectedItem is LanguageOption option)
+            {
+                selectedLanguages[page] = option.Code;
+                RenderTable();
+            }
+        };
         previous.Click += (_, _) =>
         {
             if (page > 0)
@@ -84,7 +166,8 @@ public static class ReplacementConfirmationDialog
         pager.Children.Add(pageText);
         pager.Children.Add(next);
 
-        var content = new Grid { RowSpacing = 12, MinWidth = 900 };
+        var content = new Grid { RowSpacing = 10 };
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -92,9 +175,11 @@ public static class ReplacementConfirmationDialog
         content.Children.Add(heading);
         Grid.SetRow(explanation, 1);
         content.Children.Add(explanation);
-        Grid.SetRow(tableHost, 2);
+        Grid.SetRow(languageBar, 2);
+        content.Children.Add(languageBar);
+        Grid.SetRow(tableHost, 3);
         content.Children.Add(tableHost);
-        Grid.SetRow(pager, 3);
+        Grid.SetRow(pager, 4);
         content.Children.Add(pager);
 
         RenderPage();
@@ -105,14 +190,34 @@ public static class ReplacementConfirmationDialog
             Content = content,
             PrimaryButtonText = confirmText,
             CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Close,
+            DefaultButton = ContentDialogButton.Primary,
         };
-        dialog.Resources["ContentDialogMaxWidth"] = 1180d;
-        dialog.Resources["ContentDialogMinWidth"] = 940d;
-        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+
+        void ApplyAdaptiveSize()
+        {
+            var dialogWidth = Math.Clamp(xamlRoot.Size.Width - 48, 420, 1280);
+            var contentWidth = Math.Max(340, dialogWidth - 48);
+            dialog.Resources["ContentDialogMaxWidth"] = dialogWidth;
+            dialog.Resources["ContentDialogMinWidth"] = Math.Min(640, dialogWidth);
+            content.Width = contentWidth;
+            content.MaxWidth = contentWidth;
+            tableHost.Height = Math.Clamp(xamlRoot.Size.Height - 330, 220, 600);
+        }
+
+        void RootChanged(XamlRoot sender, XamlRootChangedEventArgs args) => ApplyAdaptiveSize();
+        ApplyAdaptiveSize();
+        xamlRoot.Changed += RootChanged;
+        try
+        {
+            return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        }
+        finally
+        {
+            xamlRoot.Changed -= RootChanged;
+        }
     }
 
-    private static UIElement BuildTable(ReplacementPreview preview)
+    private static UIElement BuildTable(ReplacementPreview preview, string language)
     {
         if (preview.DeletesTarget)
         {
@@ -127,25 +232,15 @@ public static class ReplacementConfirmationDialog
         }
 
         var rows = new StackPanel { Spacing = 1 };
-        rows.Children.Add(BuildRow(
-            "#",
-            "成就 ID",
-            "简体中文名称",
-            "简体中文说明",
-            "英文名称",
-            "英文说明",
-            "其他语言",
-            isHeader: true));
+        rows.Children.Add(BuildRow("#", "成就 ID", "名称", "说明", isHeader: true));
         foreach (var row in preview.Rows)
         {
+            var translation = row.TranslationFor(language);
             rows.Children.Add(BuildRow(
                 row.Index.ToString(),
                 row.ApiName,
-                row.SimplifiedChineseName,
-                row.SimplifiedChineseDescription,
-                row.EnglishName,
-                row.EnglishDescription,
-                row.OtherLanguages,
+                translation.Name,
+                translation.Description,
                 isHeader: false));
         }
         if (preview.Rows.Count == 0)
@@ -153,16 +248,15 @@ public static class ReplacementConfirmationDialog
             rows.Children.Add(new TextBlock
             {
                 Text = "此 BIN 中没有识别到成就记录。",
-                Padding = new Thickness(12),
+                Padding = new Thickness(10),
                 TextWrapping = TextWrapping.Wrap,
             });
         }
         return new ScrollViewer
         {
             Content = rows,
-            Height = 410,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollMode = ScrollMode.Enabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollMode = ScrollMode.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollMode = ScrollMode.Enabled,
         };
@@ -171,56 +265,43 @@ public static class ReplacementConfirmationDialog
     private static Grid BuildRow(
         string index,
         string apiName,
-        string chineseName,
-        string chineseDescription,
-        string englishName,
-        string englishDescription,
-        string otherLanguages,
+        string name,
+        string description,
         bool isHeader)
     {
         var grid = new Grid
         {
-            MinWidth = 1660,
-            Padding = new Thickness(8),
-            ColumnSpacing = 12,
+            Padding = new Thickness(8, 7, 8, 7),
+            ColumnSpacing = 8,
             Background = isHeader
                 ? Application.Current.Resources["SubtleFillColorSecondaryBrush"] as Brush
                 : null,
         };
-        foreach (var width in new[]
-                 {
-                     IndexWidth,
-                     ApiNameWidth,
-                     NameWidth,
-                     DescriptionWidth,
-                     NameWidth,
-                     DescriptionWidth,
-                     OtherWidth,
-                 })
-        {
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
-        }
-        var values = new[]
-        {
-            index,
-            apiName,
-            chineseName,
-            chineseDescription,
-            englishName,
-            englishDescription,
-            otherLanguages,
-        };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.7, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
+        var values = new[] { index, apiName, name, description };
         for (var column = 0; column < values.Length; column++)
         {
             var text = new TextBlock
             {
                 Text = values[column],
                 TextWrapping = TextWrapping.Wrap,
-                FontWeight = isHeader ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+                FontWeight = isHeader
+                    ? Microsoft.UI.Text.FontWeights.SemiBold
+                    : Microsoft.UI.Text.FontWeights.Normal,
             };
             Grid.SetColumn(text, column);
             grid.Children.Add(text);
         }
         return grid;
     }
+
+    private static string DisplayLanguage(string code) =>
+        LanguageNames.TryGetValue(code, out var displayName)
+            ? $"{displayName} ({code})"
+            : code;
+
+    private sealed record LanguageOption(string Code, string DisplayName);
 }

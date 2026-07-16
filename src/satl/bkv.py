@@ -108,6 +108,7 @@ def achievement_preview(data: bytes) -> dict[str, Any]:
         raise PreflightError("Binary KeyValues schema 未通过字节级 roundtrip 校验")
 
     rows: list[dict[str, Any]] = []
+    languages: set[str] = set()
     for bits in (node for node in _walk(nodes) if node.type_id == 0 and node.name == "bits"):
         for achievement in bits.children:
             if achievement.type_id != 0:
@@ -119,27 +120,33 @@ def achievement_preview(data: bytes) -> dict[str, Any]:
                 continue
             names = _language_strings(display_name)
             descriptions = _language_strings(display_description)
-            other_languages = []
+            translations: dict[str, dict[str, str]] = {}
             for language in sorted(set(names) | set(descriptions)):
-                if language in {"schinese", "english"}:
+                language_code = language.casefold()
+                if language_code in {"token", "tokens"}:
                     continue
-                name = names.get(language, "")
-                description = descriptions.get(language, "")
-                other_languages.append(f"{language}: {name}" + (f" — {description}" if description else ""))
+                languages.add(language_code)
+                translations[language_code] = {
+                    "name": names.get(language, ""),
+                    "description": descriptions.get(language, ""),
+                }
             rows.append(
                 {
                     "index": len(rows) + 1,
                     "api_name": api_name,
-                    "schinese_name": names.get("schinese", ""),
-                    "schinese_description": descriptions.get("schinese", ""),
-                    "english_name": names.get("english", ""),
-                    "english_description": descriptions.get("english", ""),
-                    "other_languages": "\n".join(other_languages),
+                    "translations": translations,
                 }
             )
     return {
         "achievement_count": len(rows),
         "roundtrip_equal": True,
+        "languages": sorted(
+            languages,
+            key=lambda language: (
+                {"schinese": 0, "tchinese": 1, "english": 2}.get(language, 3),
+                language,
+            ),
+        ),
         "rows": rows,
     }
 

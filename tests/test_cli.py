@@ -233,7 +233,8 @@ def test_install_preview_emits_verified_schema_content_without_writes(tmp_path: 
     preview = next(event for event in events if event["event"] == "item-preview")
     assert preview["payload"]["roundtrip_equal"] is True
     assert preview["payload"]["rows"][0]["api_name"] == "ACH_FIRST"
-    assert preview["payload"]["rows"][0]["schinese_name"] == "第一个"
+    assert preview["payload"]["languages"][0] == "schinese"
+    assert preview["payload"]["rows"][0]["translations"]["schinese"]["name"] == "第一个"
     assert not (steam / "appcache").exists()
     assert not (data_dir / "state.json").exists()
 

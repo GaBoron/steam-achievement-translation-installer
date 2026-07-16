@@ -62,35 +62,40 @@ public sealed partial class GamesPage : Page
         });
         content.Children.Add(new TextBlock
         {
-            Text = "已经完成翻译：选择“贡献翻译”。投稿 ZIP 必须命名为 UserGameStatsSchema_<app_id>.zip，并完整包含所声明语言的成就名称和说明。提交前请先在翻译库索引中搜索 App ID；已收录游戏应使用“更新已有翻译”模板。",
+            Text = "已经完成翻译：使用下面的“贡献翻译”入口。投稿 ZIP 必须命名为 UserGameStatsSchema_<app_id>.zip，并完整包含所声明语言的成就名称和说明。提交前请先在翻译库索引中搜索 App ID；已收录游戏应使用“更新已有翻译”模板。",
             TextWrapping = TextWrapping.Wrap,
         });
+        var contributionButton = new Button
+        {
+            Content = "贡献翻译",
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        AutomationProperties.SetName(contributionButton, "打开翻译贡献表单");
+        contributionButton.Click += (_, _) => OpenExternalUrl(ContributionUrl, "翻译贡献");
+        content.Children.Add(contributionButton);
         content.Children.Add(appIdBox);
-        var petitionLink = new HyperlinkButton { Content = "提交翻译请愿" };
-        petitionLink.Click += (_, _) => OpenExternalUrl(PetitionUrl, "翻译请愿");
-        content.Children.Add(petitionLink);
 
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
             Title = "翻译请愿",
             Content = content,
-            PrimaryButtonText = "导出请愿 ZIP",
-            SecondaryButtonText = "贡献翻译",
+            PrimaryButtonText = "提交翻译请愿",
+            SecondaryButtonText = "导出请愿 ZIP",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary,
-            IsPrimaryButtonEnabled = false,
+            IsSecondaryButtonEnabled = false,
         };
         appIdBox.TextChanged += (_, _) =>
-            dialog.IsPrimaryButtonEnabled = IsValidAppId(appIdBox.Text);
+            dialog.IsSecondaryButtonEnabled = IsValidAppId(appIdBox.Text);
 
         var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Secondary)
+        if (result == ContentDialogResult.Primary)
         {
-            OpenExternalUrl(ContributionUrl, "翻译贡献");
+            OpenExternalUrl(PetitionUrl, "翻译请愿");
             return;
         }
-        if (result != ContentDialogResult.Primary)
+        if (result != ContentDialogResult.Secondary)
         {
             return;
         }

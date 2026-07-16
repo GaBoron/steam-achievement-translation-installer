@@ -1,6 +1,8 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 namespace Satl_Gui.Services;
 
@@ -18,7 +20,9 @@ public sealed record UpdateCheckResult(
 public sealed class UpdateService
 {
     public const string RepositoryUrl = "https://github.com/GaBoron/steam-achievement-translation-installer";
-    private static readonly Uri DefaultEndpoint = new(
+    private static readonly Uri DefaultEndpoint = new($"{RepositoryUrl}/releases/latest");
+    private static readonly Uri DefaultFeedEndpoint = new($"{RepositoryUrl}/releases.atom");
+    private static readonly Uri DefaultApiEndpoint = new(
         "https://api.github.com/repos/GaBoron/steam-achievement-translation-installer/releases/latest");
     private static readonly HttpClient SharedClient = CreateClient();
     private const long MaximumInstallerBytes = 1024L * 1024 * 1024;
@@ -26,17 +30,25 @@ public sealed class UpdateService
     private readonly HttpClient _client;
     private readonly Version _currentVersion;
     private readonly Uri _endpoint;
+    private readonly Uri? _feedEndpoint;
+    private readonly Uri? _apiEndpoint;
+    private readonly bool _fallbackEnabled;
     private readonly string _updateDirectory;
 
     public UpdateService(
         HttpClient? client = null,
         Version? currentVersion = null,
         Uri? endpoint = null,
-        string? updateDirectory = null)
+        string? updateDirectory = null,
+        Uri? feedEndpoint = null,
+        Uri? apiEndpoint = null)
     {
         _client = client ?? SharedClient;
         _currentVersion = currentVersion ?? CurrentVersion;
         _endpoint = endpoint ?? DefaultEndpoint;
+        _fallbackEnabled = endpoint is null || feedEndpoint is not null || apiEndpoint is not null;
+        _feedEndpoint = _fallbackEnabled ? feedEndpoint ?? DefaultFeedEndpoint : null;
+        _apiEndpoint = _fallbackEnabled ? apiEndpoint ?? DefaultApiEndpoint : null;
         _updateDirectory = updateDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SteamAchievementTranslationInstaller",
@@ -50,35 +62,58 @@ public sealed class UpdateService
 
     public async Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken = default)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, _endpoint);
-        request.Headers.UserAgent.ParseAdd($"SATLInstaller/{FormatVersion(_currentVersion)}");
-        request.Headers.Accept.ParseAdd("application/vnd.github+json");
-
-        using var response = await _client.SendAsync(
-            request,
-            HttpCompletionOption.ResponseHeadersRead,
-            cancellationToken);
-        if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
+        var failures = new List<Exception>();
+        ReleaseMetadata? metadata = null;
+        try
         {
-            throw new HttpRequestException("GitHub 暂时拒绝了更新请求，请稍后重试。", null, response.StatusCode);
+            metadata = await FetchReleaseMetadataAsync(_endpoint, cancellationToken);
         }
-        response.EnsureSuccessStatusCode();
-
-        var payload = await response.Content.ReadAsStringAsync(cancellationToken);
-        var metadata = TryParseReleaseMetadata(payload);
-        var releasePage = metadata?.ReleasePage ?? response.RequestMessage?.RequestUri;
-        var tag = metadata?.Tag ?? string.Empty;
-        Version latestVersion;
-        if (metadata is not null)
+        catch (Exception exception) when (_fallbackEnabled && exception is not OperationCanceledException)
         {
-            if (!TryParseVersion(tag, out latestVersion))
+            failures.Add(exception);
+        }
+
+        if (_feedEndpoint is not null
+            && (metadata is null || string.IsNullOrWhiteSpace(metadata.ReleaseNotes)))
+        {
+            try
             {
-                throw new InvalidDataException("GitHub Release 返回了无效的版本标签。");
+                var feed = await FetchReleaseMetadataAsync(_feedEndpoint, cancellationToken);
+                metadata = MergeMetadata(metadata, feed);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                failures.Add(exception);
             }
         }
-        else if (!TryGetReleaseVersion(releasePage, out latestVersion, out tag))
+
+        if (_apiEndpoint is not null
+            && (metadata is null || string.IsNullOrWhiteSpace(metadata.ReleaseNotes)))
         {
-            throw new InvalidDataException("GitHub 最新发布信息没有返回有效的三段版本标签。");
+            try
+            {
+                var api = await FetchReleaseMetadataAsync(_apiEndpoint, cancellationToken);
+                metadata = MergeMetadata(metadata, api);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                failures.Add(exception);
+            }
+        }
+
+        if (metadata is null)
+        {
+            var reason = failures.LastOrDefault()?.Message ?? "所有更新来源都没有返回有效版本信息。";
+            throw new HttpRequestException(
+                $"无法从 GitHub Releases 页面、发布订阅或 API 获取更新信息：{reason}");
+        }
+
+        var releasePage = metadata.ReleasePage;
+        var tag = metadata.Tag;
+        Version latestVersion;
+        if (!TryParseVersion(tag, out latestVersion))
+        {
+            throw new InvalidDataException("GitHub Release 返回了无效的三段版本标签。");
         }
 
         var isAvailable = latestVersion > Normalize(_currentVersion);
@@ -87,11 +122,11 @@ public sealed class UpdateService
         releasePage ??= new Uri($"{RepositoryUrl}/releases/tag/{tag}");
         var installerName = $"SATLInstaller-Setup-v{latestText}.exe";
         var portableName = $"SATLInstaller-Portable-v{latestText}.zip";
-        var installer = metadata?.Asset(installerName)
+        var installer = metadata.Asset(installerName)
             ?? new Uri($"{RepositoryUrl}/releases/download/{tag}/{installerName}");
-        var portable = metadata?.Asset(portableName)
+        var portable = metadata.Asset(portableName)
             ?? new Uri($"{RepositoryUrl}/releases/download/{tag}/{portableName}");
-        var checksums = metadata?.Asset("SHA256SUMS.txt")
+        var checksums = metadata.Asset("SHA256SUMS.txt")
             ?? new Uri($"{RepositoryUrl}/releases/download/{tag}/SHA256SUMS.txt");
         var message = isAvailable
             ? $"发现新版本 v{latestText}。"
@@ -104,9 +139,145 @@ public sealed class UpdateService
             installer,
             portable,
             checksums,
-            metadata?.ReleaseNotes ?? "此版本未提供发布说明。",
+            string.IsNullOrWhiteSpace(metadata.ReleaseNotes)
+                ? "暂时无法读取此版本的发布说明，请打开发布页查看。"
+                : metadata.ReleaseNotes,
             message);
     }
+
+    private async Task<ReleaseMetadata?> FetchReleaseMetadataAsync(
+        Uri endpoint,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+        request.Headers.UserAgent.ParseAdd($"SATLInstaller/{FormatVersion(_currentVersion)}");
+        request.Headers.Accept.ParseAdd("text/html");
+        request.Headers.Accept.ParseAdd("application/atom+xml");
+        request.Headers.Accept.ParseAdd("application/vnd.github+json");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+        HttpResponseMessage response;
+        try
+        {
+            response = await _client.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"{endpoint.Host} 响应更新检查超时。");
+        }
+        using (response)
+        {
+            if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
+            {
+                throw new HttpRequestException(
+                    "GitHub 更新来源暂时拒绝了更新请求，请稍后重试。",
+                    null,
+                    response.StatusCode);
+            }
+            response.EnsureSuccessStatusCode();
+
+            var finalUri = response.RequestMessage?.RequestUri;
+            if (TryGetReleaseVersion(finalUri, out _, out var redirectedTag))
+            {
+                return EmptyMetadata(redirectedTag, finalUri);
+            }
+
+            var payload = await response.Content.ReadAsStringAsync(timeout.Token);
+            return TryParseReleaseMetadata(payload)
+                ?? TryParseAtomMetadata(payload);
+        }
+    }
+
+    private static ReleaseMetadata? MergeMetadata(
+        ReleaseMetadata? primary,
+        ReleaseMetadata? supplement)
+    {
+        if (primary is null)
+        {
+            return supplement;
+        }
+        if (supplement is null
+            || !primary.Tag.Equals(supplement.Tag, StringComparison.OrdinalIgnoreCase))
+        {
+            return primary;
+        }
+
+        var assets = new Dictionary<string, Uri>(supplement.Assets, StringComparer.OrdinalIgnoreCase);
+        foreach (var asset in primary.Assets)
+        {
+            assets[asset.Key] = asset.Value;
+        }
+        return new ReleaseMetadata(
+            primary.Tag,
+            primary.ReleasePage ?? supplement.ReleasePage,
+            string.IsNullOrWhiteSpace(primary.ReleaseNotes)
+                ? supplement.ReleaseNotes
+                : primary.ReleaseNotes,
+            assets);
+    }
+
+    private static ReleaseMetadata? TryParseAtomMetadata(string payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return null;
+        }
+        try
+        {
+            var document = XDocument.Parse(payload);
+            XNamespace atom = "http://www.w3.org/2005/Atom";
+            foreach (var entry in document.Root?.Elements(atom + "entry") ?? [])
+            {
+                var link = entry.Elements(atom + "link")
+                    .FirstOrDefault(element =>
+                        element.Attribute("rel")?.Value is null or "alternate")
+                    ?.Attribute("href")?.Value;
+                if (!Uri.TryCreate(link, UriKind.Absolute, out var releasePage)
+                    || !TryGetReleaseVersion(releasePage, out _, out var tag))
+                {
+                    continue;
+                }
+                var content = entry.Element(atom + "content")?.Value ?? string.Empty;
+                return new ReleaseMetadata(
+                    tag,
+                    releasePage,
+                    HtmlToPlainText(content),
+                    new Dictionary<string, Uri>(StringComparer.OrdinalIgnoreCase));
+            }
+        }
+        catch (System.Xml.XmlException)
+        {
+            return null;
+        }
+        return null;
+    }
+
+    private static string HtmlToPlainText(string html)
+    {
+        var text = Regex.Replace(html, "<\\s*br\\s*/?\\s*>", "\n", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, "<\\s*li(?:\\s[^>]*)?>", "- ", RegexOptions.IgnoreCase);
+        text = Regex.Replace(
+            text,
+            "</\\s*(?:p|li|h[1-6]|ul|ol|blockquote)\\s*>",
+            "\n",
+            RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, "<[^>]+>", string.Empty);
+        text = WebUtility.HtmlDecode(text).Replace("\u00a0", " ");
+        return string.Join(
+            "\n",
+            text.Split(['\r', '\n'])
+                .Select(line => line.Trim())
+                .Where(line => line.Length > 0));
+    }
+
+    private static ReleaseMetadata EmptyMetadata(string tag, Uri? releasePage) => new(
+        tag,
+        releasePage,
+        string.Empty,
+        new Dictionary<string, Uri>(StringComparer.OrdinalIgnoreCase));
 
     public async Task<string> DownloadInstallerAsync(
         UpdateCheckResult update,

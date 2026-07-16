@@ -62,6 +62,38 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public void ReplacementPreviewScansLanguagesAndDefaultsToSimplifiedChinese()
+    {
+        using var document = JsonDocument.Parse(
+            """
+            {
+              "app_id":"105600",
+              "game_name":"Terraria",
+              "variant_id":"default",
+              "action":"replace",
+              "achievement_count":1,
+              "languages":["schinese","english","japanese"],
+              "rows":[{
+                "index":1,
+                "api_name":"TIMBER",
+                "translations":{
+                  "schinese":{"name":"木材！！","description":"砍倒第一棵树。"},
+                  "english":{"name":"Timber!!","description":"Chop down your first tree."},
+                  "token":{"name":"TOKEN_NAME","description":"TOKEN_DESC"}
+                }
+              }]
+            }
+            """);
+
+        var preview = ReplacementPreview.FromPayload(document.RootElement, "fallback");
+
+        Assert.Equal("schinese", preview.DefaultLanguage);
+        Assert.Equal(["schinese", "english", "japanese"], preview.Languages);
+        Assert.Equal("木材！！", preview.Rows[0].TranslationFor("schinese").Name);
+        Assert.DoesNotContain("token", preview.Rows[0].Translations.Keys);
+    }
+
+    [Fact]
     public async Task SettingsRoundTripUsesRequestedPath()
     {
         var root = Path.Combine(Path.GetTempPath(), $"satl-gui-test-{Guid.NewGuid():N}");
@@ -377,6 +409,50 @@ public sealed class ProtocolTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public async Task UpdateServiceFallsBackFromRateLimitedPageToAtomFeed()
+    {
+        var latest = new Uri("https://example.invalid/releases/latest");
+        var feed = new Uri("https://example.invalid/releases.atom");
+        var api = new Uri("https://api.example.invalid/releases/latest");
+        var atom = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <entry>
+                <link rel="alternate" href="https://github.com/GaBoron/steam-achievement-translation-installer/releases/tag/v0.4.0" />
+                <content type="html">&lt;h2&gt;修复&lt;/h2&gt;&lt;ul&gt;&lt;li&gt;改进更新检查回退&lt;/li&gt;&lt;/ul&gt;</content>
+              </entry>
+            </feed>
+            """;
+        using var client = new HttpClient(new RoutingHttpHandler(request =>
+        {
+            if (request.RequestUri == latest)
+            {
+                return new HttpResponseMessage(System.Net.HttpStatusCode.Forbidden);
+            }
+            if (request.RequestUri == feed)
+            {
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new StringContent(atom),
+                };
+            }
+            return new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable);
+        }));
+        var service = new UpdateService(
+            client,
+            new Version(0, 3, 0),
+            latest,
+            feedEndpoint: feed,
+            apiEndpoint: api);
+
+        var result = await service.CheckAsync();
+
+        Assert.True(result.IsUpdateAvailable);
+        Assert.Equal("0.4.0", result.LatestVersion);
+        Assert.Contains("改进更新检查回退", result.ReleaseNotes);
     }
 
     [Fact]

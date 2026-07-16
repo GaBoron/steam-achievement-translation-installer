@@ -19,12 +19,14 @@ def schema_bytes() -> bytes:
             "display",
             _object(
                 "name",
+                _string("token", "ACH_FIRST_NAME"),
                 _string("english", "First"),
                 _string("schinese", "第一个"),
                 _string("japanese", "最初"),
             ),
             _object(
                 "desc",
+                _string("token", "ACH_FIRST_DESC"),
                 _string("english", "Do the thing"),
                 _string("schinese", "完成目标"),
                 _string("japanese", "目標を達成"),
@@ -45,8 +47,13 @@ def test_achievement_preview_includes_all_localized_content() -> None:
 
     assert preview["roundtrip_equal"] is True
     assert preview["achievement_count"] == 1
+    assert preview["languages"] == ["schinese", "english", "japanese"]
     row = preview["rows"][0]
     assert row["api_name"] == "ACH_FIRST"
-    assert row["schinese_name"] == "第一个"
-    assert row["english_description"] == "Do the thing"
-    assert "japanese: 最初 — 目標を達成" in row["other_languages"]
+    assert row["translations"]["schinese"]["name"] == "第一个"
+    assert row["translations"]["english"]["description"] == "Do the thing"
+    assert row["translations"]["japanese"] == {
+        "name": "最初",
+        "description": "目標を達成",
+    }
+    assert "token" not in row["translations"]
