@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace Satl_Gui.Services;
 
@@ -9,27 +11,36 @@ public sealed record UpdateCheckResult(
     Uri? ReleasePage,
     Uri? InstallerDownload,
     Uri? PortableDownload,
+    Uri? ChecksumsDownload,
+    string ReleaseNotes,
     string Message);
 
 public sealed class UpdateService
 {
     public const string RepositoryUrl = "https://github.com/GaBoron/steam-achievement-translation-installer";
     private static readonly Uri DefaultEndpoint = new(
-        $"{RepositoryUrl}/releases/latest");
+        "https://api.github.com/repos/GaBoron/steam-achievement-translation-installer/releases/latest");
     private static readonly HttpClient SharedClient = CreateClient();
+    private const long MaximumInstallerBytes = 1024L * 1024 * 1024;
 
     private readonly HttpClient _client;
     private readonly Version _currentVersion;
     private readonly Uri _endpoint;
+    private readonly string _updateDirectory;
 
     public UpdateService(
         HttpClient? client = null,
         Version? currentVersion = null,
-        Uri? endpoint = null)
+        Uri? endpoint = null,
+        string? updateDirectory = null)
     {
         _client = client ?? SharedClient;
         _currentVersion = currentVersion ?? CurrentVersion;
         _endpoint = endpoint ?? DefaultEndpoint;
+        _updateDirectory = updateDirectory ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SteamAchievementTranslationInstaller",
+            "updates");
     }
 
     public static Version CurrentVersion =>
@@ -41,6 +52,7 @@ public sealed class UpdateService
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, _endpoint);
         request.Headers.UserAgent.ParseAdd($"SATLInstaller/{FormatVersion(_currentVersion)}");
+        request.Headers.Accept.ParseAdd("application/vnd.github+json");
 
         using var response = await _client.SendAsync(
             request,
@@ -52,20 +64,37 @@ public sealed class UpdateService
         }
         response.EnsureSuccessStatusCode();
 
-        var releasePage = response.RequestMessage?.RequestUri;
-        if (!TryGetReleaseVersion(releasePage, out var latestVersion, out var tag))
+        var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+        var metadata = TryParseReleaseMetadata(payload);
+        var releasePage = metadata?.ReleasePage ?? response.RequestMessage?.RequestUri;
+        var tag = metadata?.Tag ?? string.Empty;
+        Version latestVersion;
+        if (metadata is not null)
         {
-            throw new InvalidDataException("GitHub 最新发布页没有返回有效的版本标签。");
+            if (!TryParseVersion(tag, out latestVersion))
+            {
+                throw new InvalidDataException("GitHub Release 返回了无效的版本标签。");
+            }
+        }
+        else if (!TryGetReleaseVersion(releasePage, out latestVersion, out tag))
+        {
+            throw new InvalidDataException("GitHub 最新发布信息没有返回有效的三段版本标签。");
         }
 
         var isAvailable = latestVersion > Normalize(_currentVersion);
         var currentText = FormatVersion(_currentVersion);
         var latestText = FormatVersion(latestVersion);
         releasePage ??= new Uri($"{RepositoryUrl}/releases/tag/{tag}");
-        var installer = new Uri($"{RepositoryUrl}/releases/download/{tag}/SATLInstaller-Setup-v{latestText}.exe");
-        var portable = new Uri($"{RepositoryUrl}/releases/download/{tag}/SATLInstaller-Portable-v{latestText}.zip");
+        var installerName = $"SATLInstaller-Setup-v{latestText}.exe";
+        var portableName = $"SATLInstaller-Portable-v{latestText}.zip";
+        var installer = metadata?.Asset(installerName)
+            ?? new Uri($"{RepositoryUrl}/releases/download/{tag}/{installerName}");
+        var portable = metadata?.Asset(portableName)
+            ?? new Uri($"{RepositoryUrl}/releases/download/{tag}/{portableName}");
+        var checksums = metadata?.Asset("SHA256SUMS.txt")
+            ?? new Uri($"{RepositoryUrl}/releases/download/{tag}/SHA256SUMS.txt");
         var message = isAvailable
-            ? $"发现新版本 v{latestText}。请打开 GitHub Release 选择安装版或便携版。"
+            ? $"发现新版本 v{latestText}。"
             : $"当前已是最新版本 v{currentText}。";
         return new UpdateCheckResult(
             isAvailable,
@@ -74,13 +103,180 @@ public sealed class UpdateService
             releasePage,
             installer,
             portable,
+            checksums,
+            metadata?.ReleaseNotes ?? "此版本未提供发布说明。",
             message);
+    }
+
+    public async Task<string> DownloadInstallerAsync(
+        UpdateCheckResult update,
+        IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!update.IsUpdateAvailable
+            || update.InstallerDownload is null
+            || update.ChecksumsDownload is null)
+        {
+            throw new InvalidOperationException("当前更新信息不包含可下载并校验的安装程序。");
+        }
+
+        var fileName = Path.GetFileName(update.InstallerDownload.LocalPath);
+        var expectedName = $"SATLInstaller-Setup-v{update.LatestVersion}.exe";
+        if (!fileName.Equals(expectedName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException($"安装程序文件名无效：{fileName}");
+        }
+        var expectedHash = await ReadExpectedHashAsync(
+            update.ChecksumsDownload,
+            fileName,
+            cancellationToken);
+        Directory.CreateDirectory(_updateDirectory);
+        var destination = Path.Combine(_updateDirectory, fileName);
+        var partial = destination + ".part";
+        try
+        {
+            File.Delete(partial);
+            using var request = new HttpRequestMessage(HttpMethod.Get, update.InstallerDownload);
+            request.Headers.UserAgent.ParseAdd($"SATLInstaller/{FormatVersion(_currentVersion)}");
+            using var response = await _client.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+            response.EnsureSuccessStatusCode();
+            var total = response.Content.Headers.ContentLength;
+            if (total is > MaximumInstallerBytes)
+            {
+                throw new InvalidDataException("安装程序超过 1 GiB 安全上限。");
+            }
+            string actualHash;
+            {
+                await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
+                await using var target = new FileStream(
+                    partial,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None,
+                    1024 * 1024,
+                    FileOptions.Asynchronous | FileOptions.WriteThrough);
+                using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                var buffer = new byte[1024 * 1024];
+                long received = 0;
+                while (true)
+                {
+                    var count = await source.ReadAsync(buffer, cancellationToken);
+                    if (count == 0)
+                    {
+                        break;
+                    }
+                    received += count;
+                    if (received > MaximumInstallerBytes)
+                    {
+                        throw new InvalidDataException("安装程序超过 1 GiB 安全上限。");
+                    }
+                    hasher.AppendData(buffer, 0, count);
+                    await target.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
+                    if (total is > 0)
+                    {
+                        progress?.Report((double)received / total.Value);
+                    }
+                }
+                await target.FlushAsync(cancellationToken);
+                actualHash = Convert.ToHexString(hasher.GetHashAndReset()).ToLowerInvariant();
+            }
+            if (!actualHash.Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    $"安装程序 SHA-256 校验失败：期望 {expectedHash}，实际 {actualHash}。"
+                );
+            }
+            File.Move(partial, destination, overwrite: true);
+            progress?.Report(1);
+            return destination;
+        }
+        finally
+        {
+            File.Delete(partial);
+        }
+    }
+
+    private async Task<string> ReadExpectedHashAsync(
+        Uri checksumsDownload,
+        string fileName,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, checksumsDownload);
+        request.Headers.UserAgent.ParseAdd($"SATLInstaller/{FormatVersion(_currentVersion)}");
+        using var response = await _client.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var text = await response.Content.ReadAsStringAsync(cancellationToken);
+        foreach (var line in text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2
+                && parts[0].Length == 64
+                && parts[0].All(Uri.IsHexDigit)
+                && parts[^1].TrimStart('*').Equals(fileName, StringComparison.OrdinalIgnoreCase))
+            {
+                return parts[0].ToLowerInvariant();
+            }
+        }
+        throw new InvalidDataException($"SHA256SUMS.txt 中没有 {fileName} 的校验值。");
     }
 
     private static HttpClient CreateClient() => new()
     {
-        Timeout = TimeSpan.FromSeconds(15),
+        Timeout = TimeSpan.FromMinutes(10),
     };
+
+    private static ReleaseMetadata? TryParseReleaseMetadata(string payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return null;
+        }
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("tag_name", out var tagValue)
+                || tagValue.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+            var assets = new Dictionary<string, Uri>(StringComparer.OrdinalIgnoreCase);
+            if (root.TryGetProperty("assets", out var assetValues)
+                && assetValues.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var asset in assetValues.EnumerateArray())
+                {
+                    var name = asset.TryGetProperty("name", out var nameValue)
+                        ? nameValue.GetString()
+                        : null;
+                    var url = asset.TryGetProperty("browser_download_url", out var urlValue)
+                        ? urlValue.GetString()
+                        : null;
+                    if (!string.IsNullOrWhiteSpace(name)
+                        && Uri.TryCreate(url, UriKind.Absolute, out var assetUri))
+                    {
+                        assets[name] = assetUri;
+                    }
+                }
+            }
+            var releasePage = root.TryGetProperty("html_url", out var htmlValue)
+                && Uri.TryCreate(htmlValue.GetString(), UriKind.Absolute, out var page)
+                ? page
+                : null;
+            var notes = root.TryGetProperty("body", out var bodyValue)
+                && bodyValue.ValueKind == JsonValueKind.String
+                ? bodyValue.GetString() ?? string.Empty
+                : string.Empty;
+            return new ReleaseMetadata(tagValue.GetString() ?? string.Empty, releasePage, notes, assets);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private static bool TryGetReleaseVersion(Uri? uri, out Version version, out string tag)
     {
@@ -112,7 +308,8 @@ public sealed class UpdateService
         {
             normalized = normalized[..separator];
         }
-        if (Version.TryParse(normalized, out var parsed))
+        if (Version.TryParse(normalized, out var parsed)
+            && normalized.Split('.').Length == 3)
         {
             version = Normalize(parsed);
             return true;
@@ -130,5 +327,14 @@ public sealed class UpdateService
     {
         var normalized = Normalize(value);
         return $"{normalized.Major}.{normalized.Minor}.{normalized.Build}";
+    }
+
+    private sealed record ReleaseMetadata(
+        string Tag,
+        Uri? ReleasePage,
+        string ReleaseNotes,
+        IReadOnlyDictionary<string, Uri> Assets)
+    {
+        public Uri? Asset(string name) => Assets.TryGetValue(name, out var value) ? value : null;
     }
 }

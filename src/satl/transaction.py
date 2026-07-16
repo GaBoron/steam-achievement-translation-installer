@@ -184,6 +184,27 @@ class TransactionManager:
             if cleanup_rollback:
                 rollback.unlink(missing_ok=True)
 
+    def restore_preview_source(self, app_id: str, expected_target: Path) -> Path | None:
+        """Return the verified file that a restore would write, or None when it would delete."""
+        transaction = self.store.active_transaction(app_id)
+        if transaction is None:
+            raise TransactionError(f"{app_id} 没有可恢复的安装记录")
+        target = Path(str(transaction.get("target") or "")).resolve()
+        if target != Path(expected_target).resolve():
+            raise TransactionError(f"状态文件中的目标路径与当前 Steam 目录不一致：{target}")
+        if not transaction.get("previous_exists"):
+            return None
+        snapshot_value = transaction.get("snapshot")
+        if not isinstance(snapshot_value, str):
+            raise TransactionError(f"{app_id} 的备份路径缺失")
+        snapshot = self._resolve_relative(snapshot_value)
+        if not snapshot.is_file():
+            raise TransactionError(f"找不到安装前备份：{snapshot}")
+        expected_previous = str(transaction.get("previous_sha256") or "")
+        if sha256_file(snapshot) != expected_previous:
+            raise IntegrityError(f"安装前备份 SHA-256 不匹配：{snapshot}")
+        return snapshot
+
     def status(self, app_id: str) -> str:
         transaction = self.store.active_transaction(app_id)
         if transaction is None:

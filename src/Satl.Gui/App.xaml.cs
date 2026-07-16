@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Microsoft.Windows.AppLifecycle;
 using Satl_Gui.Services;
 using Satl_Gui.ViewModels;
 
@@ -17,6 +18,7 @@ namespace Satl_Gui;
 /// </summary>
 public partial class App : Application
 {
+    private AppInstance? _mainInstance;
     /// <summary>
     /// The main application window. Use <c>App.Window</c> from any class that needs
     /// the window reference (for dialogs, pickers, interop, etc.).
@@ -61,12 +63,22 @@ public partial class App : Application
     /// Invoked when the application is launched.
     /// </summary>
     /// <param name="args">Details about the launch request and process.</param>
-    protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
         try
         {
-            Window = new MainWindow();
             DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            var current = AppInstance.GetCurrent();
+            var activation = current.GetActivatedEventArgs();
+            _mainInstance = AppInstance.FindOrRegisterForKey("SATLInstaller.MainWindow");
+            if (!_mainInstance.IsCurrent)
+            {
+                await _mainInstance.RedirectActivationToAsync(activation);
+                Exit();
+                return;
+            }
+            _mainInstance.Activated += MainInstance_Activated;
+            Window = new MainWindow();
             Window.Activate();
         }
         catch (Exception exception)
@@ -74,6 +86,19 @@ public partial class App : Application
             LogStartupException(exception);
             throw;
         }
+    }
+
+    private static void MainInstance_Activated(object? sender, AppActivationArguments args)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (Window is null)
+            {
+                return;
+            }
+            Window.Activate();
+            Window.AppWindow.Show();
+        });
     }
 
     private static void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)

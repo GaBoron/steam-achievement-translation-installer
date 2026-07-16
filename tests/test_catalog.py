@@ -118,6 +118,8 @@ def test_download_falls_back_and_verifies_variant_hash(tmp_path: Path) -> None:
 
     def opener(request, timeout):
         calls.append(request.full_url)
+        assert request.get_header("Cache-control") == "no-cache"
+        assert request.get_header("Pragma") == "no-cache"
         if request.full_url.startswith("https://first.invalid"):
             raise URLError("first source down")
         return Response(beta)
@@ -201,10 +203,9 @@ def test_catalog_retries_direct_when_configured_proxy_is_unavailable(
     catalog = repository.refresh()
 
     assert "123" in catalog.entries
-    assert calls == [
-        "proxy:https://catalog.invalid",
-        "direct:https://catalog.invalid",
-    ]
+    assert len(calls) == 2
+    assert calls[0].startswith("proxy:https://catalog.invalid?satl_refresh=")
+    assert calls[1].startswith("direct:https://catalog.invalid?satl_refresh=")
 
 
 def test_catalog_falls_back_after_invalid_first_source(tmp_path: Path) -> None:

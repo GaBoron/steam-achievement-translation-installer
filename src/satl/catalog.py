@@ -54,6 +54,18 @@ def verify_schema_file(path: Path, variant: SchemaVariant) -> None:
         )
 
 
+def verify_schema_bytes(payload: bytes, variant: SchemaVariant) -> None:
+    if len(payload) != variant.file_size_bytes:
+        raise IntegrityError(
+            f"文件大小不匹配：{variant.schema_file}，期望 {variant.file_size_bytes}，实际 {len(payload)}"
+        )
+    actual = hashlib.sha256(payload).hexdigest()
+    if actual != variant.sha256:
+        raise IntegrityError(
+            f"SHA-256 不匹配：{variant.schema_file}，期望 {variant.sha256}，实际 {actual}"
+        )
+
+
 def _require_string(raw: dict[str, Any], key: str, context: str) -> str:
     value = raw.get(key)
     if not isinstance(value, str) or not value.strip():
@@ -188,7 +200,14 @@ class CatalogRepository:
         return self.data_dir / "cache" / "index.json"
 
     def _open(self, url: str, timeout: float):
-        request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+            },
+        )
         if self._opener is not None:
             return self._opener(request, timeout=timeout)
         try:
@@ -207,7 +226,9 @@ class CatalogRepository:
         errors: list[str] = []
         for url in self.catalog_urls:
             try:
-                with self._open(url, 15) as response:
+                separator = "&" if "?" in url else "?"
+                request_url = f"{url}{separator}satl_refresh={uuid.uuid4().hex}"
+                with self._open(request_url, 15) as response:
                     payload = response.read(MAX_CATALOG_BYTES + 1)
                 if len(payload) > MAX_CATALOG_BYTES:
                     raise CatalogError("index.json 超过 8 MiB 安全上限")
@@ -281,6 +302,39 @@ class CatalogRepository:
         if integrity is not None:
             raise IntegrityError("所有来源均未提供通过校验的文件：" + details)
         raise CatalogError("无法下载 schema：" + details)
+
+    def read_schema_bytes(self, variant: SchemaVariant, *, offline: bool = False) -> bytes:
+        """Read a verified schema for preview without mutating the schema cache."""
+        cached = self.schema_cache_path(variant)
+        if cached.is_file():
+            try:
+                payload = cached.read_bytes()
+                verify_schema_bytes(payload, variant)
+                return payload
+            except (OSError, IntegrityError):
+                if offline:
+                    raise CatalogError(f"离线缓存中的 schema 无效：{variant.schema_file}")
+        if offline:
+            raise CatalogError(f"离线缓存中没有 {variant.schema_file}")
+
+        failures: list[SatlDownloadFailure] = []
+        quoted = urllib.parse.quote(variant.schema_file, safe="/")
+        for root in self.roots:
+            url = f"{root}/{quoted}"
+            try:
+                with self._open(url, 30) as response:
+                    payload = response.read(variant.file_size_bytes + 1)
+                verify_schema_bytes(payload, variant)
+                return payload
+            except IntegrityError as exc:
+                failures.append(SatlDownloadFailure(url, exc, True))
+            except (OSError, urllib.error.URLError, TimeoutError) as exc:
+                failures.append(SatlDownloadFailure(url, exc, False))
+        integrity = next((failure for failure in failures if failure.integrity), None)
+        details = "；".join(f"{failure.url}: {failure.error}" for failure in failures)
+        if integrity is not None:
+            raise IntegrityError("所有来源均未提供通过校验的文件：" + details)
+        raise CatalogError("无法读取 schema 预览：" + details)
 
     def _download_and_verify(self, url: str, destination: Path, variant: SchemaVariant) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)

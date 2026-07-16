@@ -166,7 +166,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center" Spacing="3">
                             <TextBlock Text="启动时检查更新" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <TextBlock Text="启动后检查 GitHub Releases；只有发现新版本时才提醒。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                            <TextBlock Text="启动后检查 GitHub Releases；发现新版本时显示发布说明和下载按钮。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                         </StackPanel>
                         <ToggleSwitch x:Name="UpdateCheckSwitch" Grid.Column="1" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="UpdateCheckSwitch_Toggled" />
                     </Grid>
@@ -182,7 +182,7 @@
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
                             <Button Content="检查更新" Click="CheckForUpdates_Click" AutomationProperties.Name="检查软件更新" />
-                            <Button x:Name="OpenReleaseButton" Content="打开下载页" Click="OpenRelease_Click" Visibility="Collapsed" AutomationProperties.Name="打开 GitHub Release 下载页" />
+                            <Button x:Name="OpenReleaseButton" Content="打开发布页" Click="OpenRelease_Click" Visibility="Collapsed" AutomationProperties.Name="打开 GitHub Release 发布页" />
                         </StackPanel>
                     </Grid>
                 </StackPanel>

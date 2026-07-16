@@ -20,6 +20,7 @@
         <CommandBar Grid.Row="1" DefaultLabelPosition="Right" IsDynamicOverflowEnabled="True">
             <CommandBar.Content>
                 <AutoSuggestBox
+                    x:Name="SearchBox"
                     Width="300"
                     PlaceholderText="搜索游戏名称或 App ID"
                     QueryIcon="Find"
@@ -27,7 +28,7 @@
                     AutomationProperties.Name="搜索游戏" />
             </CommandBar.Content>
             <AppBarButton Icon="Help" Label="未找到游戏？" Click="Petition_Click" AutomationProperties.Name="打开翻译请愿" />
-            <AppBarButton Icon="Refresh" Label="重新扫描" Click="Refresh_Click" />
+            <AppBarButton Icon="Refresh" Label="重新扫描" Click="Refresh_Click" KeyboardAcceleratorTextOverride="F5" />
             <AppBarButton Icon="Download" Label="安装所选" Click="Install_Click" />
         </CommandBar>
         <ListView
@@ -59,6 +60,7 @@
                             <CheckBox
                                 VerticalAlignment="Center"
                                 IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                                Click="GameSelection_Click"
                                 AutomationProperties.Name="{x:Bind GameName}" />
                             <StackPanel Grid.Column="1" Spacing="4">
                                 <TextBlock Text="{x:Bind GameName}" TextTrimming="CharacterEllipsis" Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -75,7 +77,8 @@
                                 VerticalAlignment="Center"
                                 Header="翻译版本"
                                 ItemsSource="{x:Bind Variants}"
-                                SelectedItem="{x:Bind SelectedVariant, Mode=TwoWay}"
+                                SelectedValuePath="VariantId"
+                                SelectedValue="{x:Bind SelectedVariantId, Mode=TwoWay}"
                                 AutomationProperties.Name="选择翻译版本" />
                         </Grid>
                     </Border>

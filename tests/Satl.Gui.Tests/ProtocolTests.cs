@@ -52,6 +52,13 @@ public sealed class ProtocolTests
         Assert.Equal("with-unlock-conditions", item.SelectedVariant?.VariantId);
         Assert.Contains("含解锁条件", item.SelectedVariant?.DisplayName);
         Assert.Contains("with-unlock-conditions · 含解锁条件", item.InstalledVersionText);
+        Assert.Equal("with-unlock-conditions", item.SelectedVariantId);
+
+        item.SelectedVariantId = "default";
+
+        Assert.Equal("default", item.SelectedVariant?.VariantId);
+        item.SelectedVariantId = string.Empty;
+        Assert.Equal("default", item.SelectedVariantId);
     }
 
     [Fact]
@@ -306,6 +313,73 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public async Task UpdateServiceReadsReleaseNotesAndDownloadsVerifiedInstaller()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"satl-update-test-{Guid.NewGuid():N}");
+        var installerBytes = "verified-installer"u8.ToArray();
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(installerBytes))
+            .ToLowerInvariant();
+        var releaseJson = """
+            {
+              "tag_name": "v0.3.0",
+              "html_url": "https://github.com/GaBoron/steam-achievement-translation-installer/releases/tag/v0.3.0",
+              "body": "## 修复\n- 修复刷新问题",
+              "assets": [
+                {"name":"SATLInstaller-Setup-v0.3.0.exe","browser_download_url":"https://example.invalid/SATLInstaller-Setup-v0.3.0.exe"},
+                {"name":"SATLInstaller-Portable-v0.3.0.zip","browser_download_url":"https://example.invalid/SATLInstaller-Portable-v0.3.0.zip"},
+                {"name":"SHA256SUMS.txt","browser_download_url":"https://example.invalid/SHA256SUMS.txt"}
+              ]
+            }
+            """;
+        using var client = new HttpClient(new RoutingHttpHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("SHA256SUMS.txt", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new StringContent($"{hash}  SATLInstaller-Setup-v0.3.0.exe\n"),
+                };
+            }
+            if (path.EndsWith(".exe", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(installerBytes),
+                };
+            }
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(releaseJson),
+            };
+        }));
+        try
+        {
+            var service = new UpdateService(
+                client,
+                new Version(0, 2, 0),
+                new Uri("https://example.invalid/latest"),
+                root);
+
+            var update = await service.CheckAsync();
+            var progress = new List<double>();
+            var installer = await service.DownloadInstallerAsync(
+                update,
+                new Progress<double>(progress.Add));
+
+            Assert.Contains("修复刷新问题", update.ReleaseNotes);
+            Assert.Equal(installerBytes, await File.ReadAllBytesAsync(installer));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task UpdateServiceMapsForbiddenResponseToReadableMessage()
     {
         using var client = new HttpClient(new StubHttpHandler(
@@ -330,5 +404,18 @@ public sealed class ProtocolTests
             RequestMessage = new HttpRequestMessage(HttpMethod.Get, responseUri),
             Content = new StringContent(string.Empty),
         });
+    }
+
+    private sealed class RoutingHttpHandler(
+        Func<HttpRequestMessage, HttpResponseMessage> route) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var response = route(request);
+            response.RequestMessage ??= request;
+            return Task.FromResult(response);
+        }
     }
 }

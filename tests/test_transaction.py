@@ -44,6 +44,7 @@ def test_install_and_restore_existing_original(tmp_path: Path) -> None:
     assert (data / transaction["snapshot"]).read_bytes() == b"original"
     assert manager.status("123") == "installed"
     assert manager.installed_variant_id("123") == "default"
+    assert manager.restore_preview_source("123", target).read_bytes() == b"original"
 
     manager.restore("123", target)
     assert target.read_bytes() == b"original"
@@ -58,6 +59,7 @@ def test_restore_deletes_file_when_no_original_existed(tmp_path: Path) -> None:
     manager = TransactionManager(tmp_path / "data")
     manager.install("123", target, source, variant_for("123", payload))
     assert target.exists()
+    assert manager.restore_preview_source("123", target) is None
     manager.restore("123", target)
     assert not target.exists()
 

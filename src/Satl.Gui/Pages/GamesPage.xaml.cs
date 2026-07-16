@@ -1,11 +1,17 @@
 using System.Diagnostics;
 using System.Globalization;
 using Microsoft.Windows.Storage.Pickers;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Satl_Gui.Models;
+using Satl_Gui.Services;
 using Satl_Gui.ViewModels;
+using Windows.System;
+using Windows.UI.Core;
+using Windows.Foundation;
 
 namespace Satl_Gui.Pages;
 
@@ -13,12 +19,23 @@ public sealed partial class GamesPage : Page
 {
     private const string PetitionUrl =
         "https://github.com/GaBoron/steam-achievement-translation-library/issues/new?template=translation_petition_zh.yml";
+    private const string ContributionUrl =
+        "https://github.com/GaBoron/steam-achievement-translation-library/issues/new?template=translation_contribution_zh.yml";
+
+    private int? _selectionAnchorIndex;
 
     public MainViewModel ViewModel => App.ViewModel;
 
     public GamesPage()
     {
         InitializeComponent();
+        AddShortcut(VirtualKey.A, VirtualKeyModifiers.Control, SelectAll_Invoked);
+        AddShortcut(
+            VirtualKey.A,
+            VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift,
+            ClearSelection_Invoked);
+        AddShortcut(VirtualKey.F, VirtualKeyModifiers.Control, FocusSearch_Invoked);
+        AddShortcut(VirtualKey.F5, VirtualKeyModifiers.None, Refresh_Invoked);
     }
 
     private async void Refresh_Click(object sender, RoutedEventArgs e) => await ViewModel.ScanAsync();
@@ -40,18 +57,26 @@ public sealed partial class GamesPage : Page
         });
         content.Children.Add(new TextBlock
         {
-            Text = "先输入 ID 并导出 ZIP。软件会自动查找 Steam 生成的原始成就文件，并按翻译库要求打包。提交请愿时，请填写游戏名、商店地址和目标语言，再把导出的 ZIP 拖到“需要翻译的成就 schema ZIP”字段。",
+            Text = "只有原始文件：输入 ID 并导出请愿 ZIP，再通过“提交翻译请愿”告诉社区你需要哪些语言。请愿不会把原始文件直接收录为翻译。",
+            TextWrapping = TextWrapping.Wrap,
+        });
+        content.Children.Add(new TextBlock
+        {
+            Text = "已经完成翻译：选择“贡献翻译”。投稿 ZIP 必须命名为 UserGameStatsSchema_<app_id>.zip，并完整包含所声明语言的成就名称和说明。提交前请先在翻译库索引中搜索 App ID；已收录游戏应使用“更新已有翻译”模板。",
             TextWrapping = TextWrapping.Wrap,
         });
         content.Children.Add(appIdBox);
+        var petitionLink = new HyperlinkButton { Content = "提交翻译请愿" };
+        petitionLink.Click += (_, _) => OpenExternalUrl(PetitionUrl, "翻译请愿");
+        content.Children.Add(petitionLink);
 
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
             Title = "翻译请愿",
             Content = content,
-            PrimaryButtonText = "导出",
-            SecondaryButtonText = "提交请愿",
+            PrimaryButtonText = "导出请愿 ZIP",
+            SecondaryButtonText = "贡献翻译",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary,
             IsPrimaryButtonEnabled = false,
@@ -62,14 +87,7 @@ public sealed partial class GamesPage : Page
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Secondary)
         {
-            try
-            {
-                Process.Start(new ProcessStartInfo(PetitionUrl) { UseShellExecute = true });
-            }
-            catch (Exception exception)
-            {
-                ViewModel.ShowInfo($"无法打开翻译请愿页面：{exception.Message}", InfoBarSeverity.Error);
-            }
+            OpenExternalUrl(ContributionUrl, "翻译贡献");
             return;
         }
         if (result != ContentDialogResult.Primary)
@@ -94,29 +112,106 @@ public sealed partial class GamesPage : Page
             return;
         }
 
-        var preview = await ViewModel.PreviewInstallAsync(selected);
-        if (preview is null)
+        var previews = await ViewModel.PreviewInstallAsync(selected);
+        if (previews is null)
         {
             return;
         }
         var outdated = selected.Count(item => !item.IsCurrent);
-        var details = string.Join("\n", selected.Select(item => $"{item.GameName} · {item.SelectedVariant?.VariantId ?? "default"}"));
-        if (outdated > 0)
-        {
-            details += $"\n\n其中 {outdated} 个条目不是 current 状态，请确认仍要继续。";
-        }
-        var dialog = new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = $"安装 {selected.Count} 个翻译？",
-            Content = details,
-            PrimaryButtonText = "安装",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Primary,
-        };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        var title = outdated == 0
+            ? $"确认安装 {selected.Count} 个翻译"
+            : $"确认安装 {selected.Count} 个翻译（{outdated} 个可能已过期）";
+        if (await ReplacementConfirmationDialog.ShowAsync(
+                XamlRoot,
+                previews,
+                title,
+                "确认安装"))
         {
             await ViewModel.InstallAsync(selected);
+        }
+    }
+
+    private void GameSelection_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox checkBox || checkBox.DataContext is not GameItem item)
+        {
+            return;
+        }
+        var index = ViewModel.VisibleGames.IndexOf(item);
+        if (index < 0)
+        {
+            return;
+        }
+        var shiftPressed = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+            .HasFlag(CoreVirtualKeyStates.Down);
+        if (shiftPressed
+            && _selectionAnchorIndex is int anchor
+            && anchor >= 0
+            && anchor < ViewModel.VisibleGames.Count)
+        {
+            var selected = checkBox.IsChecked == true;
+            for (var position = Math.Min(anchor, index); position <= Math.Max(anchor, index); position++)
+            {
+                ViewModel.VisibleGames[position].IsSelected = selected;
+            }
+        }
+        _selectionAnchorIndex = index;
+    }
+
+    private void AddShortcut(
+        VirtualKey key,
+        VirtualKeyModifiers modifiers,
+        TypedEventHandler<KeyboardAccelerator, KeyboardAcceleratorInvokedEventArgs> handler)
+    {
+        var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers };
+        accelerator.Invoked += handler;
+        KeyboardAccelerators.Add(accelerator);
+    }
+
+    private void SelectAll_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (FocusManager.GetFocusedElement(XamlRoot) is TextBox or AutoSuggestBox)
+        {
+            return;
+        }
+        foreach (var item in ViewModel.VisibleGames)
+        {
+            item.IsSelected = true;
+        }
+        args.Handled = true;
+    }
+
+    private void ClearSelection_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        foreach (var item in ViewModel.Games)
+        {
+            item.IsSelected = false;
+        }
+        _selectionAnchorIndex = null;
+        args.Handled = true;
+    }
+
+    private void FocusSearch_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        SearchBox.Focus(FocusState.Keyboard);
+        args.Handled = true;
+    }
+
+    private async void Refresh_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await ViewModel.ScanAsync();
+    }
+
+    private void OpenExternalUrl(string url, string description)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception exception)
+        {
+            ViewModel.ShowInfo($"无法打开{description}页面：{exception.Message}", InfoBarSeverity.Error);
         }
     }
 

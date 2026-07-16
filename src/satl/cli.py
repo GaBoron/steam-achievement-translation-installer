@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from satl import __version__
+from satl.bkv import achievement_preview
 from satl.catalog import CatalogRepository
 from satl.errors import CatalogError, PreflightError, SatlError, TransactionError, UsageError
 from satl.models import Catalog, CatalogEntry, SchemaVariant
@@ -58,6 +59,11 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("--allow-outdated", action="store_true", help="允许安装非 current 条目")
     install.add_argument("--yes", action="store_true", help="跳过交互确认")
     install.add_argument("--dry-run", action="store_true", help="仅显示计划，不下载或写入")
+    install.add_argument(
+        "--preview-content",
+        action="store_true",
+        help="在 JSONL dry-run 中读取并输出待安装 schema 的成就内容",
+    )
     install.add_argument("--jsonl", action="store_true", help="输出供桌面应用使用的 JSON Lines 事件")
     install.set_defaults(handler=command_install)
 
@@ -77,6 +83,11 @@ def build_parser() -> argparse.ArgumentParser:
     restore.add_argument("--force", action="store_true", help="归档已变化的目标后强制恢复")
     restore.add_argument("--yes", action="store_true", help="跳过交互确认")
     restore.add_argument("--dry-run", action="store_true", help="仅显示计划，不写入")
+    restore.add_argument(
+        "--preview-content",
+        action="store_true",
+        help="在 JSONL dry-run 中读取并输出待恢复 schema 的成就内容",
+    )
     restore.add_argument("--jsonl", action="store_true", help="输出供桌面应用使用的 JSON Lines 事件")
     restore.set_defaults(handler=command_restore)
 
@@ -281,6 +292,8 @@ def _confirm(message: str, yes: bool) -> None:
 
 
 def command_install(args: argparse.Namespace) -> int:
+    if args.preview_content and (not args.dry_run or not args.jsonl):
+        raise UsageError("--preview-content 必须与 --dry-run --jsonl 一起使用")
     repository = _repository(args)
     catalog = repository.load(offline=args.offline, persist=not args.dry_run)
     _print_catalog_cache_notice(catalog, operation="install", jsonl=args.jsonl)
@@ -330,6 +343,22 @@ def command_install(args: argparse.Namespace) -> int:
             },
         )
     if args.dry_run:
+        if args.preview_content:
+            for entry, variant in plan:
+                preview = achievement_preview(
+                    repository.read_schema_bytes(variant, offline=args.offline)
+                )
+                _emit_jsonl(
+                    "install",
+                    "item-preview",
+                    {
+                        "app_id": entry.app_id,
+                        "game_name": entry.game_name,
+                        "variant_id": variant.variant_id,
+                        "action": "replace",
+                        **preview,
+                    },
+                )
         if args.jsonl:
             _emit_jsonl(
                 "install",
@@ -436,6 +465,8 @@ def command_status(args: argparse.Namespace) -> int:
 
 
 def command_restore(args: argparse.Namespace) -> int:
+    if args.preview_content and (not args.dry_run or not args.jsonl):
+        raise UsageError("--preview-content 必须与 --dry-run --jsonl 一起使用")
     if args.all and args.app_ids:
         raise UsageError("APP_ID 与 --all 不能同时使用")
     if not args.all and not args.app_ids:
@@ -466,6 +497,26 @@ def command_restore(args: argparse.Namespace) -> int:
     else:
         print("恢复计划：" + ", ".join(app_ids))
     if args.dry_run:
+        if args.preview_content:
+            for app_id in app_ids:
+                source = manager.restore_preview_source(
+                    app_id,
+                    schema_target(steam_dir, app_id),
+                )
+                preview = (
+                    achievement_preview(source.read_bytes())
+                    if source is not None
+                    else {"achievement_count": 0, "roundtrip_equal": True, "rows": []}
+                )
+                _emit_jsonl(
+                    "restore",
+                    "item-preview",
+                    {
+                        "app_id": app_id,
+                        "action": "replace" if source is not None else "delete",
+                        **preview,
+                    },
+                )
         if args.jsonl:
             _emit_jsonl(
                 "restore",

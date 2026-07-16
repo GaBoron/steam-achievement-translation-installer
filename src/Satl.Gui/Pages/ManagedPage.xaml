@@ -11,7 +11,7 @@
             <TextBlock Text="查看 SATL 的安装记录，并恢复安装前文件。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         </StackPanel>
         <CommandBar Grid.Row="1" DefaultLabelPosition="Right">
-            <AppBarButton Icon="Refresh" Label="刷新状态" Click="Refresh_Click" />
+            <AppBarButton Icon="Refresh" Label="刷新状态" Click="Refresh_Click" KeyboardAcceleratorTextOverride="F5" />
             <AppBarButton Icon="Undo" Label="恢复所选" Click="Restore_Click" />
             <AppBarButton Icon="ReportHacked" Label="强制恢复" Click="ForceRestore_Click" />
         </CommandBar>
@@ -26,7 +26,7 @@
                     <Border Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
                         <Grid ColumnSpacing="16">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                            <CheckBox VerticalAlignment="Center" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" AutomationProperties.Name="{x:Bind GameName}" />
+                            <CheckBox VerticalAlignment="Center" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" Click="GameSelection_Click" AutomationProperties.Name="{x:Bind GameName}" />
                             <StackPanel Grid.Column="1" Spacing="4">
                                 <TextBlock Text="{x:Bind GameName}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                                 <TextBlock Text="{x:Bind Subtitle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" />

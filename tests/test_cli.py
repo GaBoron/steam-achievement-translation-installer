@@ -11,7 +11,11 @@ from satl.cli import main
 
 
 def make_fixture(
-    root: Path, *, status: str = "current", game_name: str = "CLI Game"
+    root: Path,
+    *,
+    status: str = "current",
+    game_name: str = "CLI Game",
+    payload: bytes = b"translated",
 ) -> tuple[Path, Path]:
     steam = root / "Steam"
     (steam / "steamapps").mkdir(parents=True)
@@ -19,7 +23,6 @@ def make_fixture(
     (steam / "steamapps" / "appmanifest_123.acf").write_text('"AppState" {}', encoding="utf-8")
     data_dir = root / "data"
     (data_dir / "cache").mkdir(parents=True)
-    payload = b"translated"
     catalog = {
         "version": 1,
         "entries": [
@@ -39,6 +42,25 @@ def make_fixture(
     schema.parent.mkdir(parents=True)
     schema.write_bytes(payload)
     return steam, data_dir
+
+
+def preview_schema_bytes() -> bytes:
+    def string(name: str, value: str) -> bytes:
+        return b"\x01" + name.encode() + b"\0" + value.encode("utf-8") + b"\0"
+
+    def object_node(name: str, *children: bytes) -> bytes:
+        return b"\x00" + name.encode() + b"\0" + b"".join(children) + b"\x08"
+
+    achievement = object_node(
+        "0",
+        string("name", "ACH_FIRST"),
+        object_node(
+            "display",
+            object_node("name", string("english", "First"), string("schinese", "第一个")),
+            object_node("desc", string("english", "Do it"), string("schinese", "完成目标")),
+        ),
+    )
+    return object_node("UserGameStatsSchema", object_node("bits", achievement)) + b"\x08"
 
 
 def jsonl_events(output: str) -> list[dict[str, object]]:
@@ -184,6 +206,34 @@ def test_install_jsonl_dry_run_emits_plan_without_writes(tmp_path: Path, capsys)
     plan = next(event for event in events if event["event"] == "plan")
     assert plan["payload"]["items"][0]["variant_id"] == "default"
     assert events[-1]["payload"]["dry_run"] is True
+    assert not (steam / "appcache").exists()
+    assert not (data_dir / "state.json").exists()
+
+
+def test_install_preview_emits_verified_schema_content_without_writes(tmp_path: Path, capsys) -> None:
+    steam, data_dir = make_fixture(tmp_path, payload=preview_schema_bytes())
+
+    result = main(
+        [
+            "install",
+            "123",
+            "--offline",
+            "--dry-run",
+            "--preview-content",
+            "--jsonl",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+
+    assert result == 0
+    events = jsonl_events(capsys.readouterr().out)
+    preview = next(event for event in events if event["event"] == "item-preview")
+    assert preview["payload"]["roundtrip_equal"] is True
+    assert preview["payload"]["rows"][0]["api_name"] == "ACH_FIRST"
+    assert preview["payload"]["rows"][0]["schinese_name"] == "第一个"
     assert not (steam / "appcache").exists()
     assert not (data_dir / "state.json").exists()
 
@@ -386,6 +436,45 @@ def test_restore_dry_run_does_not_change_installed_file(tmp_path: Path, monkeypa
     assert result == 0
     assert target.read_bytes() == before
     assert (data_dir / "state.json").read_bytes() == state_before
+
+
+def test_restore_preview_reports_delete_when_no_original_existed(tmp_path: Path, monkeypatch, capsys) -> None:
+    steam, data_dir = make_fixture(tmp_path, payload=preview_schema_bytes())
+    monkeypatch.setattr("satl.cli.is_steam_running", lambda: False)
+    assert main(
+        [
+            "install",
+            "123",
+            "--offline",
+            "--yes",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    result = main(
+        [
+            "restore",
+            "123",
+            "--dry-run",
+            "--preview-content",
+            "--jsonl",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+
+    assert result == 0
+    preview = next(
+        event for event in jsonl_events(capsys.readouterr().out) if event["event"] == "item-preview"
+    )
+    assert preview["payload"]["action"] == "delete"
+    assert preview["payload"]["rows"] == []
 
 
 def test_invalid_status_and_restore_ids_return_usage_error(tmp_path: Path, capsys) -> None:

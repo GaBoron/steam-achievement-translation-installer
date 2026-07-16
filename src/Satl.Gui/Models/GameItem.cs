@@ -17,6 +17,7 @@ public sealed class GameItem : ObservableObject
 {
     private bool _isSelected;
     private SchemaVariantOption? _selectedVariant;
+    private string _selectedVariantId = string.Empty;
     private string _installedState = "unmanaged";
     private string _installedVariantId = string.Empty;
 
@@ -35,7 +36,43 @@ public sealed class GameItem : ObservableObject
     public SchemaVariantOption? SelectedVariant
     {
         get => _selectedVariant;
-        set => SetProperty(ref _selectedVariant, value);
+        set
+        {
+            var normalized = value
+                ?? Variants.FirstOrDefault(item => item.Primary)
+                ?? Variants.FirstOrDefault();
+            if (SetProperty(ref _selectedVariant, normalized))
+            {
+                var variantId = normalized?.VariantId ?? string.Empty;
+                if (_selectedVariantId != variantId)
+                {
+                    _selectedVariantId = variantId;
+                    OnPropertyChanged(nameof(SelectedVariantId));
+                }
+            }
+        }
+    }
+
+    public string SelectedVariantId
+    {
+        get => _selectedVariantId;
+        set
+        {
+            var selected = Variants.FirstOrDefault(item => item.VariantId == value)
+                ?? Variants.FirstOrDefault(item => item.Primary)
+                ?? Variants.FirstOrDefault();
+            var normalized = selected?.VariantId ?? string.Empty;
+            var idChanged = SetProperty(ref _selectedVariantId, normalized);
+            if (!ReferenceEquals(_selectedVariant, selected))
+            {
+                _selectedVariant = selected;
+                OnPropertyChanged(nameof(SelectedVariant));
+            }
+            else if (!idChanged)
+            {
+                return;
+            }
+        }
     }
 
     public string InstalledState
@@ -118,9 +155,10 @@ public sealed class GameItem : ObservableObject
             }
         }
 
-        item.SelectedVariant = item.Variants.FirstOrDefault(variant => variant.VariantId == item.InstalledVariantId)
+        item.SelectedVariantId = (
+            item.Variants.FirstOrDefault(variant => variant.VariantId == item.InstalledVariantId)
             ?? item.Variants.FirstOrDefault(variant => variant.Primary)
-            ?? item.Variants.FirstOrDefault();
+            ?? item.Variants.FirstOrDefault())?.VariantId ?? string.Empty;
         return item;
     }
 

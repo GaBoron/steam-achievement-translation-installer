@@ -88,14 +88,14 @@ public sealed class MainViewModel : ObservableObject
         App.Logs.Configure(Settings.LoggingEnabled, Settings.LogLevel, Settings.LogRetentionDays);
         await App.Logs.WriteAsync("信息", "应用", "设置已加载，开始初始化。");
         ApplyTheme();
-        await ScanAsync();
+        await ScanAsync(refreshCatalog: true);
         if (Settings.CheckForUpdatesOnStartup)
         {
             await CheckForUpdatesCoreAsync(showCurrentResult: false);
         }
     }
 
-    public async Task ScanAsync()
+    public async Task ScanAsync(bool refreshCatalog = true)
     {
         if (IsBusy)
         {
@@ -105,8 +105,13 @@ public sealed class MainViewModel : ObservableObject
         IsInfoOpen = false;
         try
         {
-            await ScanCoreAsync();
-            await LoadManagedCoreAsync();
+            var refreshed = false;
+            if (refreshCatalog && !Settings.Offline)
+            {
+                refreshed = await RefreshCatalogCoreAsync();
+            }
+            await ScanCoreAsync(forceOffline: refreshed || Settings.Offline);
+            await LoadManagedCoreAsync(forceOffline: refreshed || Settings.Offline);
             ShowInfo($"扫描完成，匹配到 {Games.Count} 个可用翻译。", InfoBarSeverity.Success);
         }
         catch (Exception exception)
@@ -120,9 +125,12 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public async Task<CliRunResult?> PreviewInstallAsync(IReadOnlyList<GameItem> selected)
+    public async Task<IReadOnlyList<ReplacementPreview>?> PreviewInstallAsync(IReadOnlyList<GameItem> selected)
     {
-        return await RunPreviewAsync(BuildInstallArguments(selected, dryRun: true, yes: false), "正在检查安装计划…");
+        var result = await RunPreviewAsync(
+            BuildInstallArguments(selected, dryRun: true, yes: false, previewContent: true),
+            "正在读取待安装文件内容…");
+        return result is null ? null : TryParsePreviews(result, selected);
     }
 
     public async Task InstallAsync(IReadOnlyList<GameItem> selected)
@@ -135,14 +143,16 @@ public sealed class MainViewModel : ObservableObject
         IsInfoOpen = false;
         try
         {
-            var result = await RunCliAsync(BuildInstallArguments(selected, dryRun: false, yes: true), "正在安装翻译…");
+            var result = await RunCliAsync(
+                BuildInstallArguments(selected, dryRun: false, yes: true, previewContent: false),
+                "正在安装翻译…");
             if (!result.IsSuccess)
             {
                 ShowResultError(result);
                 return;
             }
-            await ScanCoreAsync();
-            await LoadManagedCoreAsync();
+            await ScanCoreAsync(forceOffline: true);
+            await LoadManagedCoreAsync(forceOffline: true);
             ShowInfo("所选翻译已安装。", InfoBarSeverity.Success);
         }
         catch (Exception exception)
@@ -156,9 +166,14 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public async Task<CliRunResult?> PreviewRestoreAsync(IReadOnlyList<GameItem> selected, bool force)
+    public async Task<IReadOnlyList<ReplacementPreview>?> PreviewRestoreAsync(
+        IReadOnlyList<GameItem> selected,
+        bool force)
     {
-        return await RunPreviewAsync(BuildRestoreArguments(selected, dryRun: true, yes: false, force), "正在检查恢复计划…");
+        var result = await RunPreviewAsync(
+            BuildRestoreArguments(selected, dryRun: true, yes: false, force, previewContent: true),
+            "正在读取待恢复文件内容…");
+        return result is null ? null : TryParsePreviews(result, selected);
     }
 
     public async Task RestoreAsync(IReadOnlyList<GameItem> selected, bool force)
@@ -172,15 +187,15 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             var result = await RunCliAsync(
-                BuildRestoreArguments(selected, dryRun: false, yes: true, force),
+                BuildRestoreArguments(selected, dryRun: false, yes: true, force, previewContent: false),
                 force ? "正在强制恢复并归档当前文件…" : "正在恢复安装前文件…");
             if (!result.IsSuccess)
             {
                 ShowResultError(result);
                 return;
             }
-            await ScanCoreAsync();
-            await LoadManagedCoreAsync();
+            await ScanCoreAsync(forceOffline: true);
+            await LoadManagedCoreAsync(forceOffline: true);
             ShowInfo(force ? "已归档当前文件并完成恢复。" : "已恢复安装前文件。", InfoBarSeverity.Success);
         }
         catch (Exception exception)
@@ -212,8 +227,8 @@ public sealed class MainViewModel : ObservableObject
                 ShowResultError(result);
                 return;
             }
-            await ScanCoreAsync();
-            await LoadManagedCoreAsync();
+            await ScanCoreAsync(forceOffline: true);
+            await LoadManagedCoreAsync(forceOffline: true);
             ShowInfo("翻译目录缓存已刷新。", InfoBarSeverity.Success);
         }
         catch (Exception exception)
@@ -296,11 +311,21 @@ public sealed class MainViewModel : ObservableObject
                 $"更新检查完成。耗时={stopwatch.ElapsedMilliseconds} ms；当前={result.CurrentVersion}；最新={result.LatestVersion}；" +
                 $"有更新={result.IsUpdateAvailable}；发布页={result.ReleasePage}。",
                 debug: true);
-            if (result.IsUpdateAvailable || showCurrentResult)
+            if (result.IsUpdateAvailable)
             {
-                ShowInfo(
-                    result.Message,
-                    result.IsUpdateAvailable ? InfoBarSeverity.Success : InfoBarSeverity.Informational);
+                var xamlRoot = (App.Window.Content as FrameworkElement)?.XamlRoot;
+                if (xamlRoot is not null)
+                {
+                    await UpdateDialogService.ShowAsync(xamlRoot, result, _updateService);
+                }
+                else
+                {
+                    ShowInfo(result.Message, InfoBarSeverity.Success);
+                }
+            }
+            else if (showCurrentResult)
+            {
+                ShowInfo(result.Message, InfoBarSeverity.Informational);
             }
             return result;
         }
@@ -398,10 +423,64 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private async Task ScanCoreAsync()
+    private IReadOnlyList<ReplacementPreview>? TryParsePreviews(
+        CliRunResult result,
+        IReadOnlyList<GameItem> selected)
+    {
+        try
+        {
+            var selectedById = selected.ToDictionary(item => item.AppId);
+            var previews = result.Events
+                .Where(item => item.Event == "item-preview")
+                .Select(item =>
+                {
+                    var appId = item.Payload.TryGetProperty("app_id", out var value)
+                        ? value.GetString() ?? string.Empty
+                        : string.Empty;
+                    var fallbackName = selectedById.TryGetValue(appId, out var game)
+                        ? game.GameName
+                        : appId;
+                    return ReplacementPreview.FromPayload(item.Payload, fallbackName);
+                })
+                .ToList();
+            if (previews.Count != selected.Count)
+            {
+                throw new InvalidDataException(
+                    $"替换预览数量不完整：请求 {selected.Count} 个，收到 {previews.Count} 个。拒绝继续。"
+                );
+            }
+            return previews;
+        }
+        catch (Exception exception)
+        {
+            ShowException("替换预览", exception);
+            return null;
+        }
+    }
+
+    private async Task<bool> RefreshCatalogCoreAsync()
+    {
+        var arguments = new List<string> { "cache", "refresh", "--jsonl" };
+        AddDataDirectory(arguments);
+        var result = await RunCliAsync(arguments, "正在刷新云端翻译索引…");
+        if (result.IsSuccess)
+        {
+            return true;
+        }
+        ShowInfo(
+            "云端索引刷新失败，将尝试使用已验证的本地缓存。" + Environment.NewLine + ResultError(result),
+            InfoBarSeverity.Warning);
+        return false;
+    }
+
+    private async Task ScanCoreAsync(bool forceOffline = false)
     {
         var arguments = new List<string> { "scan", "--jsonl" };
-        AddCommonArguments(arguments, includeSteamDirectory: true, includeOffline: true);
+        AddCommonArguments(
+            arguments,
+            includeSteamDirectory: true,
+            includeOffline: true,
+            forceOffline: forceOffline);
         var result = await RunCliAsync(arguments, "正在扫描本地 Steam 数据…");
         if (!result.IsSuccess)
         {
@@ -425,10 +504,14 @@ public sealed class MainViewModel : ObservableObject
         ApplyFilter();
     }
 
-    private async Task LoadManagedCoreAsync()
+    private async Task LoadManagedCoreAsync(bool forceOffline = false)
     {
         var arguments = new List<string> { "status", "--jsonl" };
-        AddCommonArguments(arguments, includeSteamDirectory: false, includeOffline: true);
+        AddCommonArguments(
+            arguments,
+            includeSteamDirectory: false,
+            includeOffline: true,
+            forceOffline: forceOffline);
         var result = await RunCliAsync(arguments, "正在读取安装状态…");
         if (!result.IsSuccess)
         {
@@ -505,7 +588,11 @@ public sealed class MainViewModel : ObservableObject
         return result;
     }
 
-    private List<string> BuildInstallArguments(IReadOnlyList<GameItem> selected, bool dryRun, bool yes)
+    private List<string> BuildInstallArguments(
+        IReadOnlyList<GameItem> selected,
+        bool dryRun,
+        bool yes,
+        bool previewContent)
     {
         var arguments = new List<string> { "install" };
         arguments.AddRange(selected.Select(item => item.AppId));
@@ -522,6 +609,10 @@ public sealed class MainViewModel : ObservableObject
         {
             arguments.Add("--dry-run");
         }
+        if (previewContent)
+        {
+            arguments.Add("--preview-content");
+        }
         if (yes)
         {
             arguments.Add("--yes");
@@ -531,7 +622,12 @@ public sealed class MainViewModel : ObservableObject
         return arguments;
     }
 
-    private List<string> BuildRestoreArguments(IReadOnlyList<GameItem> selected, bool dryRun, bool yes, bool force)
+    private List<string> BuildRestoreArguments(
+        IReadOnlyList<GameItem> selected,
+        bool dryRun,
+        bool yes,
+        bool force,
+        bool previewContent)
     {
         var arguments = new List<string> { "restore" };
         arguments.AddRange(selected.Select(item => item.AppId));
@@ -543,6 +639,10 @@ public sealed class MainViewModel : ObservableObject
         {
             arguments.Add("--dry-run");
         }
+        if (previewContent)
+        {
+            arguments.Add("--preview-content");
+        }
         if (yes)
         {
             arguments.Add("--yes");
@@ -552,14 +652,18 @@ public sealed class MainViewModel : ObservableObject
         return arguments;
     }
 
-    private void AddCommonArguments(List<string> arguments, bool includeSteamDirectory, bool includeOffline)
+    private void AddCommonArguments(
+        List<string> arguments,
+        bool includeSteamDirectory,
+        bool includeOffline,
+        bool forceOffline = false)
     {
         AddDataDirectory(arguments);
         if (includeSteamDirectory)
         {
             AddSteamDirectory(arguments);
         }
-        if (includeOffline && Settings.Offline)
+        if (includeOffline && (Settings.Offline || forceOffline))
         {
             arguments.Add("--offline");
         }
