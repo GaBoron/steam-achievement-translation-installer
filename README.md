@@ -134,8 +134,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
 
 构建结果位于 `dist\release\`：安装版 EXE、便携版 ZIP 和 `SHA256SUMS.txt`。
 
-GitHub Release 的发布说明会直接显示在软件更新弹窗中。请按 changelog 编写，使用“新增”“改进”“修复”“已知问题”等清晰分组，每条只描述一个用户可感知的变化，避免把临时记录或无序待办直接作为发布正文。
-
 命令行高级用法可运行：
 
 ```powershell
