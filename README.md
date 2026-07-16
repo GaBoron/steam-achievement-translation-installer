@@ -16,8 +16,8 @@
 
 | 版本 | 适合谁 | 使用方法 |
 | --- | --- | --- |
-| `SATLInstaller-Setup-v0.5.0.exe` | 大多数用户，推荐 | 运行安装程序，之后从开始菜单打开 |
-| `SATLInstaller-Portable-v0.5.0.zip` | 不想安装或需要随身携带 | 解压完整 ZIP，再运行 `SATLInstaller.exe` |
+| `SATLInstaller-Setup-v0.6.0.exe` | 大多数用户，推荐 | 运行安装程序，之后从开始菜单打开 |
+| `SATLInstaller-Portable-v0.6.0.zip` | 不想安装或需要随身携带 | 解压完整 ZIP，再运行 `SATLInstaller.exe` |
 
 安装版和便携版功能相同。便携版不能只单独复制 EXE，必须保留解压后的全部文件。
 

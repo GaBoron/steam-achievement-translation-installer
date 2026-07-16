@@ -5,10 +5,10 @@
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>Satl_Gui</RootNamespace>
     <AssemblyName>SATLInstaller</AssemblyName>
-    <Version>0.5.0</Version>
-    <AssemblyVersion>0.5.0.0</AssemblyVersion>
-    <FileVersion>0.5.0.0</FileVersion>
-    <InformationalVersion>0.5.0</InformationalVersion>
+    <Version>0.6.0</Version>
+    <AssemblyVersion>0.6.0.0</AssemblyVersion>
+    <FileVersion>0.6.0.0</FileVersion>
+    <InformationalVersion>0.6.0</InformationalVersion>
     <Product>Steam Achievement Translation Installer</Product>
     <AssemblyTitle>Steam 成就翻译安装器</AssemblyTitle>
     <Description>Steam 成就翻译安装器</Description>
