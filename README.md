@@ -12,7 +12,7 @@
 
 ## 下载与安装
 
-请只从 [GitHub Releases](https://github.com/GaBoron/steam-achievement-translation-installer/releases/latest) 下载。
+请从 [GitHub Releases](https://github.com/GaBoron/steam-achievement-translation-installer/releases/latest) 下载。
 
 | 版本 | 适合谁 | 使用方法 |
 | --- | --- | --- |
