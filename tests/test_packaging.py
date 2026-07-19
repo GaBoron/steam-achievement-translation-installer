@@ -45,8 +45,8 @@ def test_release_projects_keep_runtime_payloads_small() -> None:
 
     assert 'Include="Microsoft.WindowsAppSDK.WinUI"' in gui_project
     assert 'Include="Microsoft.WindowsAppSDK"' not in gui_project
-    assert "<PublishTrimmed>True</PublishTrimmed>" in gui_project
-    assert "<TrimMode>partial</TrimMode>" in gui_project
+    assert "<PublishTrimmed>False</PublishTrimmed>" in gui_project
+    assert "<TrimMode>" not in gui_project
     assert "<Optimize>True</Optimize>" in gui_project
     assert "<EnableMsixTooling>true</EnableMsixTooling>" in gui_project
     assert "<PublishSingleFile>True</PublishSingleFile>" in gui_project
@@ -78,7 +78,9 @@ def test_gui_resolves_the_internal_python_runtime() -> None:
         ROOT / "src" / "Satl.Gui" / "Services" / "SatlCliService.cs"
     ).read_text(encoding="utf-8")
 
-    assert 'Path.Combine(AppContext.BaseDirectory, "_runtime")' in gui_service
+    assert "var processPath = Environment.ProcessPath;" in gui_service
+    assert "var applicationDirectory = ResolveApplicationDirectory();" in gui_service
+    assert 'Path.Combine(applicationDirectory, "_runtime")' in gui_service
     assert 'Path.Combine(runtimeDirectory, "python.exe")' in gui_service
     assert 'Path.Combine(runtimeDirectory, "satl.pyz")' in gui_service
 

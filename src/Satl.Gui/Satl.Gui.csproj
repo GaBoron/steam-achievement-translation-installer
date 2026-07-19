@@ -86,8 +86,8 @@
   <!-- Publish Properties -->
   <PropertyGroup>
     <PublishReadyToRun>False</PublishReadyToRun>
-    <PublishTrimmed>True</PublishTrimmed>
-    <TrimMode>partial</TrimMode>
+    <!-- WinUI/WinRT initialization crashes after startup when this app is trimmed. -->
+    <PublishTrimmed>False</PublishTrimmed>
     <PublishSingleFile>True</PublishSingleFile>
     <IncludeAllContentForSelfExtract>True</IncludeAllContentForSelfExtract>
     <IncludeNativeLibrariesForSelfExtract>True</IncludeNativeLibrariesForSelfExtract>
