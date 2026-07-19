@@ -25,8 +25,6 @@ body:
       description: 请选择出现问题时使用的版本。
       options:
         - 图形界面版（安装程序）
-        - 图形界面版（便携版）
-        - 命令行版
         - 从源代码运行
         - 其他
     validations:

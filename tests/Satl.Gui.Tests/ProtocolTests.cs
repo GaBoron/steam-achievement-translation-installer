@@ -324,9 +324,6 @@ public sealed class ProtocolTests
         Assert.Equal(
             "https://github.com/GaBoron/steam-achievement-translation-installer/releases/download/v0.3.0/SATLInstaller-Setup-v0.3.0.exe",
             result.InstallerDownload?.AbsoluteUri);
-        Assert.Equal(
-            "https://github.com/GaBoron/steam-achievement-translation-installer/releases/download/v0.3.0/SATLInstaller-Portable-v0.3.0.zip",
-            result.PortableDownload?.AbsoluteUri);
         Assert.Contains("发现新版本", result.Message);
     }
 
@@ -358,7 +355,6 @@ public sealed class ProtocolTests
               "body": "## 修复\n- 修复刷新问题",
               "assets": [
                 {"name":"SATLInstaller-Setup-v0.3.0.exe","browser_download_url":"https://example.invalid/SATLInstaller-Setup-v0.3.0.exe"},
-                {"name":"SATLInstaller-Portable-v0.3.0.zip","browser_download_url":"https://example.invalid/SATLInstaller-Portable-v0.3.0.zip"},
                 {"name":"SHA256SUMS.txt","browser_download_url":"https://example.invalid/SHA256SUMS.txt"}
               ]
             }

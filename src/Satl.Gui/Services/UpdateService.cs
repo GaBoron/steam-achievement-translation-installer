@@ -12,7 +12,6 @@ public sealed record UpdateCheckResult(
     string LatestVersion,
     Uri? ReleasePage,
     Uri? InstallerDownload,
-    Uri? PortableDownload,
     Uri? ChecksumsDownload,
     string ReleaseNotes,
     string Message);
@@ -121,11 +120,8 @@ public sealed class UpdateService
         var latestText = FormatVersion(latestVersion);
         releasePage ??= new Uri($"{RepositoryUrl}/releases/tag/{tag}");
         var installerName = $"SATLInstaller-Setup-v{latestText}.exe";
-        var portableName = $"SATLInstaller-Portable-v{latestText}.zip";
         var installer = metadata.Asset(installerName)
             ?? new Uri($"{RepositoryUrl}/releases/download/{tag}/{installerName}");
-        var portable = metadata.Asset(portableName)
-            ?? new Uri($"{RepositoryUrl}/releases/download/{tag}/{portableName}");
         var checksums = metadata.Asset("SHA256SUMS.txt")
             ?? new Uri($"{RepositoryUrl}/releases/download/{tag}/SHA256SUMS.txt");
         var message = isAvailable
@@ -137,7 +133,6 @@ public sealed class UpdateService
             latestText,
             releasePage,
             installer,
-            portable,
             checksums,
             string.IsNullOrWhiteSpace(metadata.ReleaseNotes)
                 ? "暂时无法读取此版本的发布说明，请打开发布页查看。"

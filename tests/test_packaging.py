@@ -42,32 +42,56 @@ def test_settings_page_owns_log_display_settings() -> None:
 
 def test_release_projects_keep_runtime_payloads_small() -> None:
     gui_project = (ROOT / "src" / "Satl.Gui" / "Satl.Gui.csproj").read_text(encoding="utf-8")
-    launcher_project = (
-        ROOT / "src" / "Satl.CliLauncher" / "Satl.CliLauncher.csproj"
-    ).read_text(encoding="utf-8")
 
     assert 'Include="Microsoft.WindowsAppSDK.WinUI"' in gui_project
     assert 'Include="Microsoft.WindowsAppSDK"' not in gui_project
     assert "<PublishTrimmed>True</PublishTrimmed>" in gui_project
     assert "<TrimMode>partial</TrimMode>" in gui_project
     assert "<Optimize>True</Optimize>" in gui_project
-
-    assert "<PublishSingleFile>true</PublishSingleFile>" in launcher_project
-    assert "<PublishTrimmed>true</PublishTrimmed>" in launcher_project
-    assert "<TrimMode>partial</TrimMode>" in launcher_project
-    assert "<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>" in (
-        launcher_project
+    assert "<EnableMsixTooling>true</EnableMsixTooling>" in gui_project
+    assert "<PublishSingleFile>True</PublishSingleFile>" in gui_project
+    assert "<IncludeAllContentForSelfExtract>True</IncludeAllContentForSelfExtract>" in gui_project
+    assert "<IncludeNativeLibrariesForSelfExtract>True</IncludeNativeLibrariesForSelfExtract>" in (
+        gui_project
     )
-    assert "<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>" in (
-        launcher_project
-    )
-
+    assert "<EnableCompressionInSingleFile>True</EnableCompressionInSingleFile>" in gui_project
 
 def test_release_build_has_size_guard_and_cleans_staging_directories() -> None:
     build_script = (ROOT / "scripts" / "build.ps1").read_text(encoding="utf-8")
 
     assert "$MaximumPackageSizeBytes = 140MB" in build_script
-    assert "-CompressionLevel Optimal" in build_script
     assert "$PackageSizeBytes -gt $MaximumPackageSizeBytes" in build_script
+    assert '$PackageRuntimeRoot = Join-Path $PackageRoot "_runtime"' in build_script
+    assert "Installer payload root must contain only SATLInstaller.exe" in build_script
+    assert "Installer payload root contains scattered runtime files" in build_script
+    assert "WinUI single-file publish produced unexpected loose files" in build_script
+    assert "PortableArchive" not in build_script
+    assert "Compress-Archive" not in build_script
+    assert "CliLauncherProject" not in build_script
+    assert "CliBuildRoot" not in build_script
     assert "Uncompressed release payload:" in build_script
     assert "Remove-Item -LiteralPath $Path -Recurse -Force" in build_script
+
+
+def test_gui_resolves_the_internal_python_runtime() -> None:
+    gui_service = (
+        ROOT / "src" / "Satl.Gui" / "Services" / "SatlCliService.cs"
+    ).read_text(encoding="utf-8")
+
+    assert 'Path.Combine(AppContext.BaseDirectory, "_runtime")' in gui_service
+    assert 'Path.Combine(runtimeDirectory, "python.exe")' in gui_service
+    assert 'Path.Combine(runtimeDirectory, "satl.pyz")' in gui_service
+
+
+def test_release_surfaces_installable_artifacts_only() -> None:
+    surfaces = [
+        ROOT / "README.md",
+        ROOT / "scripts" / "build.ps1",
+        ROOT / ".github" / "workflows" / "ci.yml",
+        ROOT / "src" / "Satl.Gui" / "Services" / "UpdateService.cs",
+    ]
+
+    for surface in surfaces:
+        content = surface.read_text(encoding="utf-8")
+        assert "SATLInstaller-Portable" not in content
+        assert "PortableDownload" not in content

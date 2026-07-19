@@ -20,7 +20,7 @@
     <SelfContained>true</SelfContained>
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
-    <EnableMsixTooling>false</EnableMsixTooling>
+    <EnableMsixTooling>true</EnableMsixTooling>
     <EnableWinAppRunSupport>false</EnableWinAppRunSupport>
     <ApplicationIcon>$(MSBuildProjectDirectory)\Assets\AppIcon.ico</ApplicationIcon>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -88,13 +88,19 @@
     <PublishReadyToRun>False</PublishReadyToRun>
     <PublishTrimmed>True</PublishTrimmed>
     <TrimMode>partial</TrimMode>
-    <PublishSingleFile>False</PublishSingleFile>
+    <PublishSingleFile>True</PublishSingleFile>
+    <IncludeAllContentForSelfExtract>True</IncludeAllContentForSelfExtract>
+    <IncludeNativeLibrariesForSelfExtract>True</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>True</EnableCompressionInSingleFile>
     <Optimize>True</Optimize>
     <DebugSymbols>False</DebugSymbols>
     <DebugType>None</DebugType>
   </PropertyGroup>
 
-  <Target Name="CopyWinUIRuntimeResources" AfterTargets="Publish">
+  <Target
+    Name="CopyWinUIRuntimeResources"
+    AfterTargets="Publish"
+    Condition="'$(PublishSingleFile)' != 'true'">
     <ItemGroup>
       <WinUIRuntimeResource Include="$(TargetDir)**\*.xbf" />
       <WinUIRuntimeResource Include="$(TargetDir)$(AssemblyName).pri" />

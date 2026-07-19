@@ -3,16 +3,15 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $DistRoot = Join-Path $ProjectRoot "dist"
 $CliRoot = Join-Path $DistRoot "satl"
 $PackageRoot = Join-Path $DistRoot "package-win-x64"
+$PackageRuntimeRoot = Join-Path $PackageRoot "_runtime"
 $GuiPublishRoot = Join-Path $DistRoot "gui-win-x64"
 $ReleaseRoot = Join-Path $DistRoot "release"
 $GuiBuildRoot = Join-Path $ProjectRoot "build\gui-publish-intermediate"
-$CliBuildRoot = Join-Path $ProjectRoot "build\cli-launcher-publish"
 $CliPayloadRoot = Join-Path $ProjectRoot "build\cli-payload"
 $DownloadRoot = Join-Path $ProjectRoot "build\downloads"
 $VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 $Python = if (Test-Path $VenvPython) { $VenvPython } else { "python" }
 $GuiProject = Join-Path $ProjectRoot "src\Satl.Gui\Satl.Gui.csproj"
-$CliLauncherProject = Join-Path $ProjectRoot "src\Satl.CliLauncher\Satl.CliLauncher.csproj"
 $InstallerScript = Join-Path $ProjectRoot "installer\SATLInstaller.iss"
 $IconPath = Join-Path $ProjectRoot "src\Satl.Gui\Assets\AppIcon.ico"
 $EmbeddedPythonVersion = "3.13.13"
@@ -28,9 +27,7 @@ $Version = @($GuiProjectXml.Project.PropertyGroup.Version | Where-Object { $_ })
 if ([string]::IsNullOrWhiteSpace($Version)) {
     throw "The WinUI project does not define a release version"
 }
-$PortableName = "SATLInstaller-Portable-v$Version.zip"
 $SetupName = "SATLInstaller-Setup-v$Version.exe"
-$PortableArchive = Join-Path $ReleaseRoot $PortableName
 $SetupExecutable = Join-Path $ReleaseRoot $SetupName
 $Checksums = Join-Path $ReleaseRoot "SHA256SUMS.txt"
 
@@ -52,13 +49,13 @@ function Find-InnoCompiler {
     return $Candidates | Select-Object -First 1
 }
 
-@($DistRoot, $CliRoot, $PackageRoot, $GuiPublishRoot, $ReleaseRoot, $GuiBuildRoot,
-    $CliBuildRoot, $CliPayloadRoot, $DownloadRoot) |
+@($DistRoot, $CliRoot, $PackageRoot, $PackageRuntimeRoot, $GuiPublishRoot, $ReleaseRoot, $GuiBuildRoot,
+    $CliPayloadRoot, $DownloadRoot) |
     ForEach-Object { Assert-WithinProject $_ }
 
 Push-Location $ProjectRoot
 try {
-    foreach ($Path in @($CliRoot, $CliBuildRoot, $CliPayloadRoot)) {
+    foreach ($Path in @($CliRoot, $CliPayloadRoot)) {
         if (Test-Path $Path) {
             Remove-Item -LiteralPath $Path -Recurse -Force
         }
@@ -90,8 +87,7 @@ try {
         throw "Embedded Python archive checksum mismatch: $EmbeddedPythonActualHash"
     }
 
-    $EmbeddedRuntimeRoot = Join-Path $CliRoot "_satl_runtime"
-    New-Item -ItemType Directory -Path $EmbeddedRuntimeRoot | Out-Null
+    $EmbeddedRuntimeRoot = $CliRoot
     Expand-Archive -LiteralPath $EmbeddedPythonArchive -DestinationPath $EmbeddedRuntimeRoot
     foreach ($UnusedRuntimeFile in @("pythonw.exe", "python.cat")) {
         $UnusedRuntimePath = Join-Path $EmbeddedRuntimeRoot $UnusedRuntimeFile
@@ -109,30 +105,25 @@ try {
         throw "SATL Python archive build failed"
     }
 
-    & dotnet publish $CliLauncherProject `
-        -c Release `
-        -r win-x64 `
-        --self-contained true `
-        "-p:Version=$Version" `
-        "-p:AssemblyVersion=$Version.0" `
-        "-p:FileVersion=$Version.0" `
-        "-p:InformationalVersion=$Version" `
-        -o $CliBuildRoot
-    if ($LASTEXITCODE -ne 0) {
-        throw "SATL native launcher publish failed"
-    }
-    Copy-Item -Path (Join-Path $CliBuildRoot "*") -Destination $CliRoot -Recurse
-    $CliVersion = & (Join-Path $CliRoot "satl.exe") --version
+    $CliVersion = & (Join-Path $CliRoot "python.exe") (Join-Path $CliRoot "satl.pyz") --version
     if ($LASTEXITCODE -ne 0 -or $CliVersion -ne "satl $Version") {
-        throw "Built satl.exe has unexpected version: $CliVersion"
+        throw "Built SATL Python payload has unexpected version: $CliVersion"
     }
 
-    foreach ($Path in @($GuiPublishRoot, $GuiBuildRoot, $PackageRoot, $ReleaseRoot)) {
+    foreach ($Path in @($PackageRoot, $ReleaseRoot)) {
         if (Test-Path $Path) {
             Remove-Item -LiteralPath $Path -Recurse -Force
         }
         New-Item -ItemType Directory -Path $Path | Out-Null
     }
+    foreach ($Path in @($GuiPublishRoot, $GuiBuildRoot)) {
+        if (-not (Test-Path -LiteralPath $Path)) {
+            New-Item -ItemType Directory -Path $Path | Out-Null
+        }
+    }
+    Get-ChildItem -LiteralPath $GuiPublishRoot -Force |
+        Where-Object { $_.Name -ne "SATLInstaller.exe" } |
+        Remove-Item -Recurse -Force
 
     & dotnet publish $GuiProject `
         -c Release `
@@ -148,6 +139,10 @@ try {
     if (-not (Test-Path $GuiExecutable)) {
         throw "WinUI publish did not produce SATLInstaller.exe"
     }
+    $GuiPublishFiles = @(Get-ChildItem -LiteralPath $GuiPublishRoot -Recurse -File)
+    if ($GuiPublishFiles.Count -ne 1 -or $GuiPublishFiles[0].FullName -ne $GuiExecutable) {
+        throw "WinUI single-file publish produced unexpected loose files"
+    }
 
     Add-Type -AssemblyName System.Drawing
     $EmbeddedIcon = [System.Drawing.Icon]::ExtractAssociatedIcon($GuiExecutable)
@@ -160,7 +155,8 @@ try {
     }
 
     Copy-Item -Path (Join-Path $GuiPublishRoot "*") -Destination $PackageRoot -Recurse
-    Copy-Item -Path (Join-Path $CliRoot "*") -Destination $PackageRoot -Recurse
+    New-Item -ItemType Directory -Path $PackageRuntimeRoot | Out-Null
+    Copy-Item -Path (Join-Path $CliRoot "*") -Destination $PackageRuntimeRoot -Recurse
     foreach ($Document in @("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md")) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot $Document) -Destination $PackageRoot
     }
@@ -177,6 +173,24 @@ try {
         } |
         Remove-Item -Recurse -Force
 
+    $RootExecutables = @(Get-ChildItem -LiteralPath $PackageRoot -File -Filter "*.exe")
+    if ($RootExecutables.Count -ne 1 -or $RootExecutables[0].Name -ne "SATLInstaller.exe") {
+        throw (
+            "Installer payload root must contain only SATLInstaller.exe; found: " +
+            (($RootExecutables | ForEach-Object Name) -join ", ")
+        )
+    }
+    $ScatteredRuntimeFiles = @(
+        Get-ChildItem -LiteralPath $PackageRoot -File |
+            Where-Object { $_.Extension -in @(".dll", ".json", ".pri", ".winmd", ".xbf") }
+    )
+    if ($ScatteredRuntimeFiles.Count -gt 0) {
+        throw (
+            "Installer payload root contains scattered runtime files: " +
+            (($ScatteredRuntimeFiles | ForEach-Object Name) -join ", ")
+        )
+    }
+
     $PackageFiles = @(Get-ChildItem -LiteralPath $PackageRoot -Recurse -File)
     $PackageSizeBytes = ($PackageFiles | Measure-Object -Property Length -Sum).Sum
     if ($PackageSizeBytes -gt $MaximumPackageSizeBytes) {
@@ -186,11 +200,6 @@ try {
             "(limit: $([math]::Round($MaximumPackageSizeBytes / 1MB, 2)) MiB)"
         )
     }
-    Compress-Archive `
-        -Path (Join-Path $PackageRoot "*") `
-        -DestinationPath $PortableArchive `
-        -CompressionLevel Optimal
-
     $InnoCompiler = Find-InnoCompiler
     if (-not $InnoCompiler) {
         throw "Inno Setup 6 is required to build the installable release"
@@ -205,17 +214,16 @@ try {
         throw "Inno Setup did not produce $SetupName"
     }
 
-    $HashLines = foreach ($ReleaseFile in @($SetupExecutable, $PortableArchive)) {
-        $Hash = (Get-FileHash -LiteralPath $ReleaseFile -Algorithm SHA256).Hash.ToLowerInvariant()
-        "$Hash  $([System.IO.Path]::GetFileName($ReleaseFile))"
-    }
-    Set-Content -LiteralPath $Checksums -Value $HashLines -Encoding ascii
+    $SetupHash = (Get-FileHash -LiteralPath $SetupExecutable -Algorithm SHA256).Hash.ToLowerInvariant()
+    Set-Content `
+        -LiteralPath $Checksums `
+        -Value "$SetupHash  $([System.IO.Path]::GetFileName($SetupExecutable))" `
+        -Encoding ascii
     foreach ($Path in @(
         $CliRoot,
         $PackageRoot,
         $GuiPublishRoot,
         $GuiBuildRoot,
-        $CliBuildRoot,
         $CliPayloadRoot
     )) {
         if (Test-Path -LiteralPath $Path) {

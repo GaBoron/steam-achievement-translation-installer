@@ -117,14 +117,20 @@ public sealed class SatlCliService
                 new Dictionary<string, string>());
         }
 
-        var sidecar = Path.Combine(AppContext.BaseDirectory, "satl.exe");
-        if (File.Exists(sidecar))
+        var runtimeDirectory = Path.Combine(AppContext.BaseDirectory, "_runtime");
+        var embeddedPython = Path.Combine(runtimeDirectory, "python.exe");
+        var applicationArchive = Path.Combine(runtimeDirectory, "satl.pyz");
+        if (File.Exists(embeddedPython) && File.Exists(applicationArchive))
         {
             return new LaunchInfo(
-                sidecar,
+                embeddedPython,
                 AppContext.BaseDirectory,
-                [],
-                new Dictionary<string, string>());
+                [applicationArchive],
+                new Dictionary<string, string>
+                {
+                    ["PYTHONUTF8"] = "1",
+                    ["PYTHONIOENCODING"] = "utf-8",
+                });
         }
 
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
@@ -147,7 +153,7 @@ public sealed class SatlCliService
             }
         }
 
-        throw new FileNotFoundException("未找到 satl.exe。请重新解压完整便携包。", sidecar);
+        throw new FileNotFoundException("SATL 运行文件不完整，请重新安装此软件。", applicationArchive);
     }
 
     private static string FormatArguments(IEnumerable<string> arguments) =>

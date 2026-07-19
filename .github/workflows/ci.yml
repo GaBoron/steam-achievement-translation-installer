@@ -37,8 +37,7 @@ jobs:
         run: ./scripts/build.ps1
       - uses: actions/upload-artifact@v4
         with:
-          name: satl-win-x64
+          name: satl-installer-win-x64
           path: |
             dist/release/SATLInstaller-Setup-v*.exe
-            dist/release/SATLInstaller-Portable-v*.zip
             dist/release/SHA256SUMS.txt
