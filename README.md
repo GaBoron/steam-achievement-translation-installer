@@ -14,7 +14,7 @@
 
 请从 [GitHub Releases](https://github.com/GaBoron/steam-achievement-translation-installer/releases/latest) 下载。
 
-下载 `SATLInstaller-Setup-v0.6.0.exe`，运行安装程序，之后从开始菜单打开。
+下载 `SATLInstaller-Setup-v0.6.1.exe`，运行安装程序，之后从开始菜单打开。
 项目只维护安装版，不再发布便携版。
 直接覆盖安装新版即可；安装程序会在复制新文件前清理旧版遗留的运行组件。
 
