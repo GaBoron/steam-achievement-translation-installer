@@ -95,3 +95,27 @@ def test_release_surfaces_installable_artifacts_only() -> None:
         content = surface.read_text(encoding="utf-8")
         assert "SATLInstaller-Portable" not in content
         assert "PortableDownload" not in content
+
+
+def test_installer_removes_known_legacy_runtime_before_upgrade() -> None:
+    installer = (ROOT / "installer" / "SATLInstaller.iss").read_text(encoding="utf-8")
+
+    assert "[InstallDelete]" in installer
+    for legacy_pattern in (
+        r'{app}\*.dll',
+        r'{app}\*.json',
+        r'{app}\*.pri',
+        r'{app}\*.winmd',
+        r'{app}\*.xbf',
+        r'{app}\satl.exe',
+        r'{app}\createdump.exe',
+        r'{app}\RestartAgent.exe',
+        r'{app}\_satl_runtime',
+        r'{app}\Assets',
+        r'{app}\Microsoft.UI.Xaml',
+        r'{app}\Pages',
+    ):
+        assert legacy_pattern in installer
+
+    assert r'Type: filesandordirs; Name: "{app}\*"' not in installer
+    assert r'Type: files; Name: "{app}\*.exe"' not in installer

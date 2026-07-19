@@ -54,6 +54,26 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 [Files]
 Source: "{#SourceRoot}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+; Versions before the single-file installer left the .NET/WinUI runtime beside the
+; executable. Remove only those known legacy payloads before copying the new files.
+; User data is stored outside {app}; the uninstaller and unrelated files are preserved.
+Type: files; Name: "{app}\*.dll"
+Type: files; Name: "{app}\*.json"
+Type: files; Name: "{app}\*.pri"
+Type: files; Name: "{app}\*.winmd"
+Type: files; Name: "{app}\*.xbf"
+Type: files; Name: "{app}\satl.exe"
+Type: files; Name: "{app}\createdump.exe"
+Type: files; Name: "{app}\RestartAgent.exe"
+Type: filesandordirs; Name: "{app}\_runtime"
+Type: filesandordirs; Name: "{app}\_satl_runtime"
+Type: filesandordirs; Name: "{app}\Assets"
+Type: filesandordirs; Name: "{app}\en-us"
+Type: filesandordirs; Name: "{app}\Microsoft.UI.Xaml"
+Type: filesandordirs; Name: "{app}\Pages"
+Type: filesandordirs; Name: "{app}\zh-CN"
+
 [Registry]
 ; Remove the legacy per-user uninstall entry when migrating to the elevated installer.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{8E4CF3D1-13E7-4FF7-A979-CE07F27F020A}_is1"; Flags: deletekey dontcreatekey
