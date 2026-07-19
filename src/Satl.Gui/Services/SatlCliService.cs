@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Satl_Gui.Models;
+using Satl_Gui.Serialization;
 
 namespace Satl_Gui.Services;
 
@@ -88,7 +89,9 @@ public sealed class SatlCliService
         SatlEvent parsed;
         try
         {
-            parsed = JsonSerializer.Deserialize<SatlEvent>(line)
+            parsed = JsonSerializer.Deserialize(
+                line,
+                SatlJsonSerializerContext.Default.SatlEvent)
                 ?? throw new InvalidDataException("SATL 返回了空事件。");
         }
         catch (JsonException exception)
@@ -148,7 +151,11 @@ public sealed class SatlCliService
     }
 
     private static string FormatArguments(IEnumerable<string> arguments) =>
-        string.Join(" ", arguments.Select(argument => JsonSerializer.Serialize(argument)));
+        string.Join(
+            " ",
+            arguments.Select(argument => JsonSerializer.Serialize(
+                argument,
+                SatlJsonSerializerContext.Default.String)));
 
     private sealed record LaunchInfo(
         string FileName,

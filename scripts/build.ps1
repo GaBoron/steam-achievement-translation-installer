@@ -21,6 +21,7 @@ $EmbeddedPythonArchive = Join-Path $DownloadRoot $EmbeddedPythonArchiveName
 $EmbeddedPythonPartial = "$EmbeddedPythonArchive.part"
 $EmbeddedPythonUrl = "https://www.python.org/ftp/python/$EmbeddedPythonVersion/$EmbeddedPythonArchiveName"
 $EmbeddedPythonSha256 = "8766a8775746235e23cf5aee5027ab1060bb981d93110577adcf3508aa0cbd55"
+$MaximumPackageSizeBytes = 140MB
 
 [xml] $GuiProjectXml = Get-Content -LiteralPath $GuiProject -Raw -Encoding UTF8
 $Version = @($GuiProjectXml.Project.PropertyGroup.Version | Where-Object { $_ })[0]
@@ -176,7 +177,19 @@ try {
         } |
         Remove-Item -Recurse -Force
 
-    Compress-Archive -Path (Join-Path $PackageRoot "*") -DestinationPath $PortableArchive
+    $PackageFiles = @(Get-ChildItem -LiteralPath $PackageRoot -Recurse -File)
+    $PackageSizeBytes = ($PackageFiles | Measure-Object -Property Length -Sum).Sum
+    if ($PackageSizeBytes -gt $MaximumPackageSizeBytes) {
+        throw (
+            "Uncompressed release payload is unexpectedly large: " +
+            "$([math]::Round($PackageSizeBytes / 1MB, 2)) MiB " +
+            "(limit: $([math]::Round($MaximumPackageSizeBytes / 1MB, 2)) MiB)"
+        )
+    }
+    Compress-Archive `
+        -Path (Join-Path $PackageRoot "*") `
+        -DestinationPath $PortableArchive `
+        -CompressionLevel Optimal
 
     $InnoCompiler = Find-InnoCompiler
     if (-not $InnoCompiler) {
@@ -197,6 +210,19 @@ try {
         "$Hash  $([System.IO.Path]::GetFileName($ReleaseFile))"
     }
     Set-Content -LiteralPath $Checksums -Value $HashLines -Encoding ascii
+    foreach ($Path in @(
+        $CliRoot,
+        $PackageRoot,
+        $GuiPublishRoot,
+        $GuiBuildRoot,
+        $CliBuildRoot,
+        $CliPayloadRoot
+    )) {
+        if (Test-Path -LiteralPath $Path) {
+            Remove-Item -LiteralPath $Path -Recurse -Force
+        }
+    }
+    Write-Host "Uncompressed release payload: $([math]::Round($PackageSizeBytes / 1MB, 2)) MiB"
     Write-Host "Built release assets in $ReleaseRoot"
 }
 finally {

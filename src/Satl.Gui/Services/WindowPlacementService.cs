@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Satl_Gui.Serialization;
 
 namespace Satl_Gui.Services;
 
@@ -29,7 +30,9 @@ public sealed class WindowPlacementService
 
         try
         {
-            return JsonSerializer.Deserialize<WindowPlacement>(File.ReadAllText(_path));
+            return JsonSerializer.Deserialize(
+                File.ReadAllText(_path),
+                SatlJsonSerializerContext.Default.WindowPlacement);
         }
         catch (JsonException)
         {
@@ -54,7 +57,9 @@ public sealed class WindowPlacementService
             Directory.CreateDirectory(directory);
             File.WriteAllText(
                 temporary,
-                JsonSerializer.Serialize(placement, new JsonSerializerOptions { WriteIndented = true }));
+                JsonSerializer.Serialize(
+                    placement,
+                    SatlJsonSerializerContext.Default.WindowPlacement));
             File.Move(temporary, _path, overwrite: true);
         }
         catch (IOException)

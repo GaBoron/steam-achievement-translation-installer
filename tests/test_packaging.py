@@ -38,3 +38,36 @@ def test_settings_page_owns_log_display_settings() -> None:
     assert "OpenLogs_Click" in settings_page
     assert "WordWrapButton" not in logs_page
     assert 'Label="打开目录"' not in logs_page
+
+
+def test_release_projects_keep_runtime_payloads_small() -> None:
+    gui_project = (ROOT / "src" / "Satl.Gui" / "Satl.Gui.csproj").read_text(encoding="utf-8")
+    launcher_project = (
+        ROOT / "src" / "Satl.CliLauncher" / "Satl.CliLauncher.csproj"
+    ).read_text(encoding="utf-8")
+
+    assert 'Include="Microsoft.WindowsAppSDK.WinUI"' in gui_project
+    assert 'Include="Microsoft.WindowsAppSDK"' not in gui_project
+    assert "<PublishTrimmed>True</PublishTrimmed>" in gui_project
+    assert "<TrimMode>partial</TrimMode>" in gui_project
+    assert "<Optimize>True</Optimize>" in gui_project
+
+    assert "<PublishSingleFile>true</PublishSingleFile>" in launcher_project
+    assert "<PublishTrimmed>true</PublishTrimmed>" in launcher_project
+    assert "<TrimMode>partial</TrimMode>" in launcher_project
+    assert "<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>" in (
+        launcher_project
+    )
+    assert "<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>" in (
+        launcher_project
+    )
+
+
+def test_release_build_has_size_guard_and_cleans_staging_directories() -> None:
+    build_script = (ROOT / "scripts" / "build.ps1").read_text(encoding="utf-8")
+
+    assert "$MaximumPackageSizeBytes = 140MB" in build_script
+    assert "-CompressionLevel Optimal" in build_script
+    assert "$PackageSizeBytes -gt $MaximumPackageSizeBytes" in build_script
+    assert "Uncompressed release payload:" in build_script
+    assert "Remove-Item -LiteralPath $Path -Recurse -Force" in build_script

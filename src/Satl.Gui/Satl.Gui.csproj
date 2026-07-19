@@ -65,7 +65,12 @@
   -->
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <!--
+      Reference only the WinUI component instead of the Windows App SDK meta-package.
+      The meta-package also deploys unused AI, ML, widgets, and workload runtimes,
+      which add tens of megabytes to both release formats.
+    -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.2.1" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   </ItemGroup>
 
@@ -81,9 +86,10 @@
   <!-- Publish Properties -->
   <PropertyGroup>
     <PublishReadyToRun>False</PublishReadyToRun>
-    <PublishTrimmed>False</PublishTrimmed>
+    <PublishTrimmed>True</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
     <PublishSingleFile>False</PublishSingleFile>
-    <Optimize>False</Optimize>
+    <Optimize>True</Optimize>
     <DebugSymbols>False</DebugSymbols>
     <DebugType>None</DebugType>
   </PropertyGroup>

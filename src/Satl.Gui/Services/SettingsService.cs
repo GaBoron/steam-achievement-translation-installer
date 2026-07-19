@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Satl_Gui.Models;
+using Satl_Gui.Serialization;
 
 namespace Satl_Gui.Services;
 
@@ -27,7 +28,9 @@ public sealed class SettingsService
         try
         {
             await using var stream = File.OpenRead(_path);
-            var settings = await JsonSerializer.DeserializeAsync<GuiSettings>(stream) ?? new GuiSettings();
+            var settings = await JsonSerializer.DeserializeAsync(
+                stream,
+                SatlJsonSerializerContext.Default.GuiSettings) ?? new GuiSettings();
             settings.LogLevel = PersistentLogLevel(settings.LogLevel);
             return settings;
         }
@@ -65,7 +68,7 @@ public sealed class SettingsService
                 await JsonSerializer.SerializeAsync(
                     stream,
                     persistentSettings,
-                    new JsonSerializerOptions { WriteIndented = true });
+                    SatlJsonSerializerContext.Default.GuiSettings);
                 await stream.FlushAsync();
             }
             File.Move(temporary, _path, true);
