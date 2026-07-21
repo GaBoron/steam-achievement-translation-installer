@@ -75,8 +75,10 @@ Type: filesandordirs; Name: "{app}\Pages"
 Type: filesandordirs; Name: "{app}\zh-CN"
 
 [Registry]
-; Remove the legacy per-user uninstall entry when migrating to the elevated installer.
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{8E4CF3D1-13E7-4FF7-A979-CE07F27F020A}_is1"; Flags: deletekey dontcreatekey
+; Remove the legacy per-user uninstall entry when migrating to the elevated installer,
+; and explicitly clean both possible uninstall entries when the application is removed.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{8E4CF3D1-13E7-4FF7-A979-CE07F27F020A}_is1"; Flags: deletekey uninsdeletekey dontcreatekey
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{8E4CF3D1-13E7-4FF7-A979-CE07F27F020A}_is1"; Flags: uninsdeletekey dontcreatekey
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

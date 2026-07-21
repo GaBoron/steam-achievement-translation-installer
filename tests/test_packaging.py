@@ -22,8 +22,23 @@ def test_installed_app_name_does_not_include_the_version() -> None:
     installer = (ROOT / "installer" / "SATLInstaller.iss").read_text(encoding="utf-8")
 
     assert "UninstallDisplayName={#MyAppName}" in installer
-    assert "Root: HKCU" in installer
-    assert "{{8E4CF3D1-13E7-4FF7-A979-CE07F27F020A}_is1" in installer
+
+
+def test_installer_removes_per_user_and_machine_registry_entries_on_uninstall() -> None:
+    installer = (ROOT / "installer" / "SATLInstaller.iss").read_text(encoding="utf-8")
+    uninstall_key = (
+        r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
+        r"\{{8E4CF3D1-13E7-4FF7-A979-CE07F27F020A}_is1"
+    )
+
+    assert (
+        f'Root: HKCU; Subkey: "{uninstall_key}"; '
+        "Flags: deletekey uninsdeletekey dontcreatekey"
+    ) in installer
+    assert (
+        f'Root: HKLM; Subkey: "{uninstall_key}"; '
+        "Flags: uninsdeletekey dontcreatekey"
+    ) in installer
 
 
 def test_settings_page_owns_log_display_settings() -> None:
