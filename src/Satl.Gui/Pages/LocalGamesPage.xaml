@@ -27,7 +27,13 @@
             </CommandBar.Content>
             <AppBarButton Icon="Refresh" Label="重新扫描" Click="Refresh_Click" />
         </CommandBar>
-        <ProgressBar Grid.Row="2" IsIndeterminate="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+        <ProgressBar
+            Grid.Row="2"
+            Visibility="{x:Bind ViewModel.Loading.Visibility, Mode=OneWay}"
+            IsIndeterminate="{x:Bind ViewModel.Loading.IsIndeterminate, Mode=OneWay}"
+            Maximum="{x:Bind ViewModel.Loading.Maximum, Mode=OneWay}"
+            Value="{x:Bind ViewModel.Loading.Value, Mode=OneWay}"
+            AutomationProperties.Name="本地游戏加载进度" />
         <ListView Grid.Row="3" ItemsSource="{x:Bind ViewModel.VisibleGames, Mode=OneWay}" SelectionMode="None">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">

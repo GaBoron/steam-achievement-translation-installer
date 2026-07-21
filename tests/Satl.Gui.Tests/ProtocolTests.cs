@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Satl_Gui.Models;
 using Satl_Gui.Services;
+using Satl_Gui.ViewModels;
 using Xunit;
 
 namespace Satl_Gui.Tests;
@@ -63,8 +64,12 @@ public sealed class ProtocolTests
 
     [Theory]
     [InlineData("current", "索引状态：可用", false)]
-    [InlineData("possibly-outdated", "索引状态：可能已过期", true)]
+    [InlineData("possibly-outdated", "索引状态：可能过期", true)]
+    [InlineData("possibly-ineffective", "索引状态：可能不生效", true)]
+    [InlineData("broken", "索引状态：已失效", true)]
+    [InlineData("pending-review", "索引状态：审核中", true)]
     [InlineData("unknown", "索引状态：未收录", true)]
+    [InlineData("future-internal-value", "索引状态：未知状态", true)]
     public void GameItemPresentsCatalogStatusClearly(
         string status,
         string expectedText,
@@ -82,6 +87,42 @@ public sealed class ProtocolTests
         {
             Assert.NotEmpty(item.CatalogWarningText);
         }
+        if (status == "future-internal-value")
+        {
+            Assert.DoesNotContain(status, item.CatalogText);
+            Assert.DoesNotContain(status, item.CatalogWarningText);
+        }
+    }
+
+    [Fact]
+    public void GameLoadingProgressTracksPlanLookupAndItems()
+    {
+        var progress = new GameLoadingProgress();
+        progress.Start("正在扫描…");
+
+        progress.Handle(SatlCliService.ParseEvent(
+            "{\"protocol_version\":1,\"operation\":\"scan\",\"event\":\"plan\",\"payload\":{\"count\":4}}"
+        ));
+        Assert.Equal(0, progress.Value);
+        Assert.Equal(4, progress.Maximum);
+        Assert.Contains("0/4", progress.Text);
+
+        progress.Handle(SatlCliService.ParseEvent(
+            "{\"protocol_version\":1,\"operation\":\"scan\",\"event\":\"progress\",\"payload\":{\"current\":1,\"total\":2,\"message\":\"正在联网查询游戏名称 1/2\"}}"
+        ));
+        Assert.Equal(1, progress.Value);
+        Assert.Equal(2, progress.Maximum);
+        Assert.Contains("1/2", progress.Text);
+
+        progress.Handle(SatlCliService.ParseEvent(
+            "{\"protocol_version\":1,\"operation\":\"scan\",\"event\":\"progress\",\"payload\":{\"current\":0,\"total\":4,\"message\":\"正在加载游戏 0/4\"}}"
+        ));
+        progress.Handle(SatlCliService.ParseEvent(
+            "{\"protocol_version\":1,\"operation\":\"scan\",\"event\":\"item-succeeded\",\"payload\":{\"position\":1}}"
+        ));
+        Assert.Equal(1, progress.Value);
+        Assert.Equal(4, progress.Maximum);
+        Assert.Contains("1/4", progress.Text);
     }
 
     [Fact]

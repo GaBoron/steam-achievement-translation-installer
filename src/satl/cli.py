@@ -11,6 +11,7 @@ from satl import __version__
 from satl.bkv import achievement_preview
 from satl.catalog import CatalogRepository
 from satl.errors import CatalogError, PreflightError, SatlError, TransactionError, UsageError
+from satl.game_names import SteamGameNameResolver
 from satl.models import Catalog, CatalogEntry, SchemaVariant
 from satl.petition import export_petition_archive
 from satl.state import StateStore
@@ -218,8 +219,63 @@ def command_scan(args: argparse.Namespace) -> int:
     else:
         app_ids = sorted(discovered.keys() & catalog.entries.keys(), key=int)
 
+    if args.jsonl:
+        _emit_jsonl(
+            "scan",
+            "plan",
+            {
+                "steam_dir": str(steam_dir) if steam_dir is not None else "",
+                "scope": args.scope,
+                "count": len(app_ids),
+            },
+        )
+
+    resolved_names: dict[str, str] = {}
+    missing_names = [
+        app_id
+        for app_id in app_ids
+        if app_id not in catalog.entries and not discovered[app_id].game_name
+    ]
+    if missing_names and not args.offline:
+        def report_name_progress(current: int, total: int, app_id: str) -> None:
+            if args.jsonl:
+                _emit_jsonl(
+                    "scan",
+                    "progress",
+                    {
+                        "phase": "name-lookup",
+                        "current": current,
+                        "total": total,
+                        "message": f"正在联网查询游戏名称 {current}/{total}（App ID {app_id}）",
+                    },
+                )
+
+        resolution = SteamGameNameResolver(Path(args.data_dir)).resolve_many(
+            missing_names,
+            report_name_progress,
+        )
+        resolved_names = resolution.names
+        if resolution.error:
+            message = f"部分本地游戏名称联网查询失败，将显示 App ID：{resolution.error}"
+            if args.jsonl:
+                _emit_jsonl("scan", "warning", {"message": message})
+            else:
+                print(f"警告：{message}", file=sys.stderr)
+
+    if args.jsonl and app_ids:
+        _emit_jsonl(
+            "scan",
+            "progress",
+            {
+                "phase": "game-loading",
+                "current": 0,
+                "total": len(app_ids),
+                "message": f"正在加载游戏 0/{len(app_ids)}",
+            },
+        )
+
     records: list[dict[str, Any]] = []
-    for app_id in app_ids:
+    for position, app_id in enumerate(app_ids, 1):
         entry = catalog.entries.get(app_id)
         discovery = discovered.get(app_id)
         sources = sorted(discovery.discovery) if discovery else []
@@ -238,7 +294,7 @@ def command_scan(args: argparse.Namespace) -> int:
             records.append(
                 {
                     "app_id": app_id,
-                    "game_name": game_name or f"Steam 游戏 {app_id}",
+                    "game_name": game_name or resolved_names.get(app_id) or f"Steam 游戏 {app_id}",
                     "discovery": sources,
                     "catalog_status": "unknown",
                     "variants": [],
@@ -248,18 +304,9 @@ def command_scan(args: argparse.Namespace) -> int:
                     "error": None,
                 }
             )
+        if args.jsonl:
+            _emit_jsonl("scan", "item-succeeded", records[-1] | {"position": position})
     if args.jsonl:
-        _emit_jsonl(
-            "scan",
-            "plan",
-            {
-                "steam_dir": str(steam_dir) if steam_dir is not None else "",
-                "scope": args.scope,
-                "count": len(records),
-            },
-        )
-        for record in records:
-            _emit_jsonl("scan", "item-succeeded", record)
         _emit_jsonl("scan", "completed", {"count": len(records), "exit_code": 0})
     elif args.json:
         _print_json(records)

@@ -25,6 +25,7 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<GameItem> Games { get; } = [];
     public ObservableCollection<GameItem> VisibleGames { get; } = [];
     public ObservableCollection<GameItem> ManagedGames { get; } = [];
+    public GameLoadingProgress GameLoading { get; } = new();
     public GuiSettings Settings { get; private set; } = new();
     public string SettingsPath => _settingsService.SettingsPath;
     public string CurrentSteamDirectory => !string.IsNullOrWhiteSpace(Settings.SteamDirectory)
@@ -536,6 +537,11 @@ public sealed class MainViewModel : ObservableObject
     {
         StatusMessage = status;
         var operation = arguments.FirstOrDefault() ?? "unknown";
+        var tracksGameLoading = operation == "scan";
+        if (tracksGameLoading)
+        {
+            GameLoading.Start(status);
+        }
         var stopwatch = Stopwatch.StartNew();
         await App.Logs.WriteAsync("信息", operation, $"开始：{status}");
         await App.Logs.WriteAsync(
@@ -553,6 +559,25 @@ public sealed class MainViewModel : ObservableObject
             result = await _cli.RunAsync(arguments, satlEvent =>
             {
                 _ = App.Logs.WriteAsync("详细", satlEvent.Operation, DescribeEvent(satlEvent), detailed: true);
+                if (tracksGameLoading)
+                {
+                    void UpdateProgress()
+                    {
+                        GameLoading.Handle(satlEvent);
+                        if (GameLoading.IsActive)
+                        {
+                            StatusMessage = GameLoading.Text;
+                        }
+                    }
+                    if (App.DispatcherQueue.HasThreadAccess)
+                    {
+                        UpdateProgress();
+                    }
+                    else
+                    {
+                        App.DispatcherQueue.TryEnqueue(UpdateProgress);
+                    }
+                }
                 if (satlEvent.Event == "item-started" && satlEvent.Payload.TryGetProperty("app_id", out var appId))
                 {
                     App.DispatcherQueue.TryEnqueue(() => StatusMessage = $"正在处理 App ID {appId.GetString()}…");
@@ -565,6 +590,10 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            if (tracksGameLoading)
+            {
+                GameLoading.Fail("游戏加载失败");
+            }
             await Task.WhenAll(diagnosticWrites);
             await App.Logs.WriteAsync(
                 "调试",
@@ -574,6 +603,10 @@ public sealed class MainViewModel : ObservableObject
             throw;
         }
         await Task.WhenAll(diagnosticWrites);
+        if (tracksGameLoading)
+        {
+            GameLoading.Finish(result.IsSuccess ? "游戏加载完成" : "游戏加载失败");
+        }
         await App.Logs.WriteAsync(
             result.IsSuccess ? "信息" : "错误",
             operation,

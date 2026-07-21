@@ -52,8 +52,11 @@
                 Severity="{x:Bind ViewModel.InfoSeverity, Mode=OneWay}" />
             <ProgressBar
                 Grid.Row="1"
-                IsIndeterminate="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
-                AutomationProperties.Name="操作进度" />
+                Visibility="{x:Bind ViewModel.GameLoading.Visibility, Mode=OneWay}"
+                IsIndeterminate="{x:Bind ViewModel.GameLoading.IsIndeterminate, Mode=OneWay}"
+                Maximum="{x:Bind ViewModel.GameLoading.Maximum, Mode=OneWay}"
+                Value="{x:Bind ViewModel.GameLoading.Value, Mode=OneWay}"
+                AutomationProperties.Name="游戏加载进度" />
             <Frame x:Name="ContentFrame" Grid.Row="2" />
             <TextBlock
                 Grid.Row="3"

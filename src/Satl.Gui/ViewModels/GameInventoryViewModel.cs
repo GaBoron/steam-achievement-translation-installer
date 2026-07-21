@@ -16,6 +16,7 @@ public sealed class GameInventoryViewModel(GameInventoryScope scope) : Observabl
 
     public ObservableCollection<GameItem> Games { get; } = [];
     public ObservableCollection<GameItem> VisibleGames { get; } = [];
+    public GameLoadingProgress Loading { get; } = new();
 
     public string SearchText
     {
@@ -63,6 +64,7 @@ public sealed class GameInventoryViewModel(GameInventoryScope scope) : Observabl
         StatusMessage = scope == GameInventoryScope.Local
             ? "正在扫描本地 Steam 游戏…"
             : "正在读取云端翻译索引…";
+        Loading.Start(StatusMessage);
         try
         {
             var arguments = BuildArguments();
@@ -79,11 +81,13 @@ public sealed class GameInventoryViewModel(GameInventoryScope scope) : Observabl
             }
             ApplyFilter();
             StatusMessage = $"共 {Games.Count} 个{(scope == GameInventoryScope.Local ? "本地游戏" : "云端条目")}";
+            Loading.Finish(StatusMessage);
             await App.Logs.WriteAsync("信息", "游戏清单", StatusMessage);
         }
         catch (Exception exception)
         {
             StatusMessage = "加载失败";
+            Loading.Fail(StatusMessage);
             App.ViewModel.ShowInfo(exception.Message, InfoBarSeverity.Error);
             await App.Logs.WriteAsync("错误", "游戏清单", exception.ToString());
         }
@@ -118,15 +122,31 @@ public sealed class GameInventoryViewModel(GameInventoryScope scope) : Observabl
         return arguments;
     }
 
-    private static void HandleEvent(SatlEvent satlEvent)
+    private void HandleEvent(SatlEvent satlEvent)
     {
-        if (satlEvent.Event == "warning"
-            && satlEvent.Payload.TryGetProperty("message", out var warning))
+        void UpdateUi()
         {
-            App.DispatcherQueue.TryEnqueue(() =>
+            Loading.Handle(satlEvent);
+            if (Loading.IsActive)
+            {
+                StatusMessage = Loading.Text;
+            }
+            if (satlEvent.Event == "warning"
+                && satlEvent.Payload.TryGetProperty("message", out var warning))
+            {
                 App.ViewModel.ShowInfo(
                     warning.GetString() ?? "正在使用本地缓存。",
-                    InfoBarSeverity.Warning));
+                    InfoBarSeverity.Warning);
+            }
+        }
+
+        if (App.DispatcherQueue.HasThreadAccess)
+        {
+            UpdateUi();
+        }
+        else
+        {
+            App.DispatcherQueue.TryEnqueue(UpdateUi);
         }
     }
 

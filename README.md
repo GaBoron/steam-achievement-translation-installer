@@ -31,6 +31,7 @@
 ## 主要功能
 
 - 自动检测 Steam 目录和本机成就缓存。
+- 本地 manifest 和翻译索引都没有游戏名时，使用 Steam 商店与 SteamSpy 联网补全名称并缓存成功结果；离线模式不会查询。
 - 搜索、批量选择并安装社区翻译。
 - 单个或批量安装、恢复前均显示确认弹窗；每页展示一个游戏的 BIN 成就表格，默认显示简体中文，并可切换该 BIN 实际包含的其他语言。
 - 支持同一游戏的多个翻译版本。
@@ -45,6 +46,7 @@
 - 支持 `Ctrl+A` 全选、`Ctrl+Shift+A` 清除选择、`Shift+左键` 连续选择、`Ctrl+F` 聚焦搜索和 `F5` 刷新。
 
 翻译数据来自 [Steam 成就翻译库](https://github.com/GaBoron/steam-achievement-translation-library)。安装器不会编辑翻译内容，也不会把你的 Steam 文件上传到网络。
+联网补全本地游戏名称时只会向 Steam 商店或备用的 SteamSpy 查询对应 App ID，不会发送 Steam 账号、目录或本地文件；查询成功的名称保存在数据目录的 `cache/steam-game-names.json`。
 
 ## 翻译请愿
 

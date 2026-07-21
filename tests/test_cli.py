@@ -4,10 +4,13 @@ import hashlib
 import json
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from satl.cli import main
+from satl.catalog import CatalogRepository
+from satl.game_names import GameNameResolution, SteamGameNameResolver
 
 
 def make_fixture(
@@ -115,11 +118,13 @@ def test_scan_jsonl_has_versioned_event_sequence(tmp_path: Path, capsys) -> None
     assert [event["event"] for event in events] == [
         "warning",
         "plan",
+        "progress",
         "item-succeeded",
         "completed",
     ]
     assert all(event["protocol_version"] == 1 for event in events)
-    assert events[2]["payload"]["app_id"] == "123"
+    assert events[3]["payload"]["app_id"] == "123"
+    assert events[3]["payload"]["position"] == 1
     assert events[-1]["payload"]["exit_code"] == 0
 
 
@@ -176,6 +181,57 @@ def test_scan_cloud_scope_lists_catalog_without_steam_directory(tmp_path: Path, 
     assert item["payload"]["app_id"] == "123"
 
 
+def test_scan_local_scope_resolves_missing_names_online(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    steam, data_dir = make_fixture(tmp_path)
+    (steam / "steamapps" / "appmanifest_456.acf").write_text(
+        '"AppState" {}', encoding="utf-8"
+    )
+    cached_catalog = CatalogRepository(data_dir).load(offline=True)
+    monkeypatch.setattr(
+        "satl.cli._repository",
+        lambda args: SimpleNamespace(load=lambda offline: cached_catalog),
+    )
+
+    def resolve_names(resolver, app_ids, progress):
+        assert app_ids == ["456"]
+        progress(1, 1, "456")
+        return GameNameResolution({"456": "Online Game Name"}, attempted=1)
+
+    monkeypatch.setattr(SteamGameNameResolver, "resolve_many", resolve_names)
+
+    result = main(
+        [
+            "scan",
+            "--scope",
+            "local",
+            "--jsonl",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+
+    assert result == 0
+    events = jsonl_events(capsys.readouterr().out)
+    lookup = next(
+        event
+        for event in events
+        if event["event"] == "progress" and event["payload"].get("phase") == "name-lookup"
+    )
+    assert lookup["payload"]["current"] == 1
+    item = next(
+        event
+        for event in events
+        if event["event"] == "item-succeeded" and event["payload"]["app_id"] == "456"
+    )
+    assert item["payload"]["game_name"] == "Online Game Name"
+
+
 def test_jsonl_escapes_cjk_for_codepage_safe_transport(tmp_path: Path, capsys) -> None:
     steam, data_dir = make_fixture(tmp_path, game_name="以撒的结合：重生")
 
@@ -196,7 +252,8 @@ def test_jsonl_escapes_cjk_for_codepage_safe_transport(tmp_path: Path, capsys) -
     assert "以撒的结合" not in output
     assert "\\u4ee5\\u6492\\u7684\\u7ed3\\u5408" in output
     events = jsonl_events(output)
-    assert events[2]["payload"]["game_name"] == "以撒的结合：重生"
+    item = next(event for event in events if event["event"] == "item-succeeded")
+    assert item["payload"]["game_name"] == "以撒的结合：重生"
 
 
 def test_json_and_jsonl_are_mutually_exclusive(tmp_path: Path, capsys) -> None:
