@@ -73,13 +73,14 @@ public partial class App : Application
             _mainInstance = AppInstance.FindOrRegisterForKey("SATLInstaller.MainWindow");
             if (!_mainInstance.IsCurrent)
             {
+                WindowActivationService.AllowForegroundActivation(_mainInstance.ProcessId);
                 await _mainInstance.RedirectActivationToAsync(activation);
                 Exit();
                 return;
             }
             _mainInstance.Activated += MainInstance_Activated;
             Window = new MainWindow();
-            Window.Activate();
+            WindowActivationService.ShowAndActivate(Window);
         }
         catch (Exception exception)
         {
@@ -96,8 +97,7 @@ public partial class App : Application
             {
                 return;
             }
-            Window.Activate();
-            Window.AppWindow.Show();
+            WindowActivationService.ShowAndActivate(Window);
         });
     }
 

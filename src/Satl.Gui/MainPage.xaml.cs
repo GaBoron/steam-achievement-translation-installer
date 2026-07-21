@@ -15,7 +15,7 @@ public sealed partial class MainPage : Page
         InitializeComponent();
         Loaded += MainPage_Loaded;
         ContentFrame.Navigate(typeof(GamesPage));
-        Navigation.SelectedItem = GamesItem;
+        Navigation.SelectedItem = ManageableGamesItem;
     }
 
     private async void MainPage_Loaded(object sender, RoutedEventArgs e)
@@ -31,8 +31,14 @@ public sealed partial class MainPage : Page
     private void Navigation_ItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
     {
         var tag = (args.InvokedItemContainer as NavigationViewItem)?.Tag?.ToString();
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            return;
+        }
         var destination = tag switch
         {
+            "local" => typeof(LocalGamesPage),
+            "cloud" => typeof(CloudGamesPage),
             "managed" => typeof(ManagedPage),
             "logs" => typeof(LogsPage),
             "settings" => typeof(SettingsPage),

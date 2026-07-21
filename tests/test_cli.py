@@ -123,6 +123,59 @@ def test_scan_jsonl_has_versioned_event_sequence(tmp_path: Path, capsys) -> None
     assert events[-1]["payload"]["exit_code"] == 0
 
 
+def test_scan_local_scope_includes_games_missing_from_catalog(tmp_path: Path, capsys) -> None:
+    steam, data_dir = make_fixture(tmp_path)
+    (steam / "steamapps" / "appmanifest_456.acf").write_text(
+        '"AppState" { "name" "Only Local" }', encoding="utf-8"
+    )
+
+    result = main(
+        [
+            "scan",
+            "--scope",
+            "local",
+            "--offline",
+            "--json",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+
+    assert result == 0
+    records = json.loads(capsys.readouterr().out)
+    assert [record["app_id"] for record in records] == ["123", "456"]
+    assert records[0]["catalog_status"] == "current"
+    assert records[1]["catalog_status"] == "unknown"
+    assert records[1]["game_name"] == "Only Local"
+    assert records[1]["variants"] == []
+
+
+def test_scan_cloud_scope_lists_catalog_without_steam_directory(tmp_path: Path, capsys) -> None:
+    _, data_dir = make_fixture(tmp_path)
+
+    result = main(
+        [
+            "scan",
+            "--scope",
+            "cloud",
+            "--offline",
+            "--jsonl",
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+
+    assert result == 0
+    events = jsonl_events(capsys.readouterr().out)
+    plan = next(event for event in events if event["event"] == "plan")
+    assert plan["payload"]["scope"] == "cloud"
+    assert plan["payload"]["steam_dir"] == ""
+    item = next(event for event in events if event["event"] == "item-succeeded")
+    assert item["payload"]["app_id"] == "123"
+
+
 def test_jsonl_escapes_cjk_for_codepage_safe_transport(tmp_path: Path, capsys) -> None:
     steam, data_dir = make_fixture(tmp_path, game_name="以撒的结合：重生")
 

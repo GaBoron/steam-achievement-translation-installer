@@ -51,5 +51,6 @@ class SteamAccount:
 @dataclass(slots=True)
 class DiscoveryRecord:
     app_id: str
+    game_name: str = ""
     discovery: set[str] = field(default_factory=set)
     accounts: set[str] = field(default_factory=set)

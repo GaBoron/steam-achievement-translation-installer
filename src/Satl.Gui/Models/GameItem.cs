@@ -125,7 +125,21 @@ public sealed class GameItem : ObservableObject
         }
     }
     public bool IsCurrent => CatalogStatus == "current";
-    public string CatalogText => IsCurrent ? "当前版本" : "可能已过期";
+    public bool HasCatalogWarning => !IsCurrent;
+    public string CatalogText => $"索引状态：{CatalogStatusLabel}";
+    public string CatalogWarningText => CatalogStatus switch
+    {
+        "unknown" => "云端索引未收录，当前没有可安装的社区翻译。",
+        "possibly-outdated" => "云端索引标记为“可能已过期”，安装前请确认翻译仍适用于当前游戏版本。",
+        _ => $"云端索引状态不是“可用”（原始状态：{CatalogStatus}），请谨慎操作。",
+    };
+    private string CatalogStatusLabel => CatalogStatus switch
+    {
+        "current" => "可用",
+        "possibly-outdated" => "可能已过期",
+        "unknown" => "未收录",
+        _ => CatalogStatus,
+    };
     public string Subtitle => $"App ID {AppId}" + (string.IsNullOrWhiteSpace(DiscoveryText) ? string.Empty : $" · {DiscoveryText}");
 
     public static GameItem FromPayload(JsonElement payload)

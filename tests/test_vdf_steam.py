@@ -6,6 +6,7 @@ from satl.steam import (
     _tasklist_contains_steam,
     discover_accounts,
     discover_library_dirs,
+    discover_installed_games,
     discover_local_games,
     steam_id32,
 )
@@ -70,6 +71,19 @@ def test_discovers_multiple_libraries_accounts_and_sources(tmp_path: Path) -> No
     assert records["200"].discovery == {"installed", "account-cache"}
     assert records["300"].discovery == {"account-cache"}
     assert records["300"].accounts == {STEAM_ID}
+
+
+def test_reads_local_game_names_from_app_manifests(tmp_path: Path) -> None:
+    steam, other = make_steam_tree(tmp_path)
+    (other / "steamapps" / "appmanifest_200.acf").write_text(
+        '"AppState" { "appid" "200" "name" "本地游戏名称" }', encoding="utf-8"
+    )
+
+    games = discover_installed_games(steam)
+    records = discover_local_games(steam)
+
+    assert games["200"] == "本地游戏名称"
+    assert records["200"].game_name == "本地游戏名称"
 
 
 def test_account_filter_accepts_local_steam_id(tmp_path: Path) -> None:

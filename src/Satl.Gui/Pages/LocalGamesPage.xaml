@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="Satl_Gui.Pages.LocalGamesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:Satl_Gui.Models">
+    <Grid Padding="32,24,32,16" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="3" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel Spacing="4">
+            <TextBlock Text="本地游戏" Style="{StaticResource TitleTextBlockStyle}" />
+            <TextBlock Text="查看 Steam 在本机安装或账号缓存中发现的全部游戏。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </StackPanel>
+        <CommandBar Grid.Row="1" DefaultLabelPosition="Right" IsDynamicOverflowEnabled="True">
+            <CommandBar.Content>
+                <AutoSuggestBox
+                    x:Name="SearchBox"
+                    Width="300"
+                    PlaceholderText="搜索游戏名称或 App ID"
+                    QueryIcon="Find"
+                    Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            </CommandBar.Content>
+            <AppBarButton Icon="Refresh" Label="重新扫描" Click="Refresh_Click" />
+        </CommandBar>
+        <ProgressBar Grid.Row="2" IsIndeterminate="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+        <ListView Grid.Row="3" ItemsSource="{x:Bind ViewModel.VisibleGames, Mode=OneWay}" SelectionMode="None">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0,0,0,8" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="models:GameItem">
+                    <Border Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="{x:Bind GameName}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="{x:Bind Subtitle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" />
+                            <TextBlock Text="{x:Bind CatalogText}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" />
+                            <InfoBar IsOpen="{x:Bind HasCatalogWarning}" IsClosable="False" Severity="Warning" Message="{x:Bind CatalogWarningText}" />
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+        <TextBlock Grid.Row="4" Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" />
+    </Grid>
+</Page>

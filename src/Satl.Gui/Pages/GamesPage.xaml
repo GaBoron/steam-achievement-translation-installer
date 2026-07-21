@@ -14,8 +14,8 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <StackPanel Spacing="4">
-            <TextBlock Text="可用翻译" Style="{StaticResource TitleTextBlockStyle}" />
-            <TextBlock Text="扫描本地 Steam 游戏，选择需要安装的成就翻译。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <TextBlock Text="可管理游戏" Style="{StaticResource TitleTextBlockStyle}" />
+            <TextBlock Text="查看本地与云端索引匹配的游戏，选择需要安装的成就翻译。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         </StackPanel>
         <CommandBar Grid.Row="1" DefaultLabelPosition="Right" IsDynamicOverflowEnabled="True">
             <CommandBar.Content>
@@ -69,6 +69,11 @@
                                     <TextBlock Text="{x:Bind CatalogText}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" />
                                     <TextBlock Text="{x:Bind StateText}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" />
                                 </StackPanel>
+                                <InfoBar
+                                    IsOpen="{x:Bind HasCatalogWarning}"
+                                    IsClosable="False"
+                                    Severity="Warning"
+                                    Message="{x:Bind CatalogWarningText}" />
                                 <TextBlock Text="{x:Bind InstalledVersionText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" />
                             </StackPanel>
                             <ComboBox

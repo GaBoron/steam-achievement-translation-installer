@@ -38,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_steam_dir(scan)
     _add_offline(scan)
     scan.add_argument("--account", help="仅使用指定的本地 SteamID64 账号缓存")
+    scan.add_argument(
+        "--scope",
+        choices=("manageable", "local", "cloud"),
+        default="manageable",
+        help="列出可管理、本地或云端游戏（默认：manageable）",
+    )
     scan.add_argument("--json", action="store_true", help="输出稳定的 JSON 记录")
     scan.add_argument("--jsonl", action="store_true", help="输出供桌面应用使用的 JSON Lines 事件")
     scan.set_defaults(handler=command_scan)
@@ -202,29 +208,64 @@ def command_scan(args: argparse.Namespace) -> int:
         raise UsageError("--json 与 --jsonl 不能同时使用")
     catalog = _repository(args).load(offline=args.offline)
     _print_catalog_cache_notice(catalog, operation="scan", jsonl=args.jsonl)
-    steam_dir = find_steam_dir(args.steam_dir)
-    discovered = discover_local_games(steam_dir, args.account)
+    steam_dir = None if args.scope == "cloud" else find_steam_dir(args.steam_dir)
+    discovered = {} if steam_dir is None else discover_local_games(steam_dir, args.account)
     manager = _manager(args)
-    records = [
-        _record(
-            catalog.entries[app_id],
-            sorted(discovery.discovery),
-            manager.status(app_id),
-            "available",
-            manager.installed_variant_id(app_id),
-        )
-        for app_id, discovery in sorted(discovered.items(), key=lambda item: int(item[0]))
-        if app_id in catalog.entries
-    ]
+    if args.scope == "cloud":
+        app_ids = sorted(catalog.entries, key=int)
+    elif args.scope == "local":
+        app_ids = sorted(discovered, key=int)
+    else:
+        app_ids = sorted(discovered.keys() & catalog.entries.keys(), key=int)
+
+    records: list[dict[str, Any]] = []
+    for app_id in app_ids:
+        entry = catalog.entries.get(app_id)
+        discovery = discovered.get(app_id)
+        sources = sorted(discovery.discovery) if discovery else []
+        if entry is not None:
+            records.append(
+                _record(
+                    entry,
+                    sources,
+                    manager.status(app_id),
+                    "available",
+                    manager.installed_variant_id(app_id),
+                )
+            )
+        else:
+            game_name = discovery.game_name if discovery else ""
+            records.append(
+                {
+                    "app_id": app_id,
+                    "game_name": game_name or f"Steam 游戏 {app_id}",
+                    "discovery": sources,
+                    "catalog_status": "unknown",
+                    "variants": [],
+                    "installed_state": manager.status(app_id),
+                    "installed_variant_id": manager.installed_variant_id(app_id),
+                    "action": "unavailable",
+                    "error": None,
+                }
+            )
     if args.jsonl:
-        _emit_jsonl("scan", "plan", {"steam_dir": str(steam_dir), "count": len(records)})
+        _emit_jsonl(
+            "scan",
+            "plan",
+            {
+                "steam_dir": str(steam_dir) if steam_dir is not None else "",
+                "scope": args.scope,
+                "count": len(records),
+            },
+        )
         for record in records:
             _emit_jsonl("scan", "item-succeeded", record)
         _emit_jsonl("scan", "completed", {"count": len(records), "exit_code": 0})
     elif args.json:
         _print_json(records)
     elif records:
-        print(f"Steam：{steam_dir}")
+        if steam_dir is not None:
+            print(f"Steam：{steam_dir}")
         for record in records:
             sources = ",".join(record["discovery"])
             variants = ",".join(item["variant_id"] for item in record["variants"])
@@ -232,7 +273,8 @@ def command_scan(args: argparse.Namespace) -> int:
                 f"{record['app_id']:>10}  {record['catalog_status']:<16} "
                 f"{record['installed_state']:<10} [{sources}] [{variants}] {record['game_name']}"
             )
-        print(f"匹配到 {len(records)} 个可用翻译。")
+        labels = {"manageable": "可管理游戏", "local": "本地游戏", "cloud": "云端条目"}
+        print(f"找到 {len(records)} 个{labels[args.scope]}。")
     else:
         print("没有在本地 Steam 数据中匹配到翻译库条目。")
     return 0

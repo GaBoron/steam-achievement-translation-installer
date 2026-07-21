@@ -18,8 +18,13 @@
         CompactPaneLength="48"
         ItemInvoked="Navigation_ItemInvoked">
         <NavigationView.MenuItems>
-            <NavigationViewItem x:Name="GamesItem" Content="游戏" Tag="games">
+            <NavigationViewItem Content="游戏" SelectsOnInvoked="False" IsExpanded="True">
                 <NavigationViewItem.Icon><SymbolIcon Symbol="Library" /></NavigationViewItem.Icon>
+                <NavigationViewItem.MenuItems>
+                    <NavigationViewItem x:Name="ManageableGamesItem" Content="可管理" Tag="manageable" />
+                    <NavigationViewItem Content="本地" Tag="local" />
+                    <NavigationViewItem Content="云端" Tag="cloud" />
+                </NavigationViewItem.MenuItems>
             </NavigationViewItem>
             <NavigationViewItem Content="已管理" Tag="managed">
                 <NavigationViewItem.Icon><SymbolIcon Symbol="Save" /></NavigationViewItem.Icon>

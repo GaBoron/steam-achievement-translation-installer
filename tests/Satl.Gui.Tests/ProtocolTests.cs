@@ -61,6 +61,29 @@ public sealed class ProtocolTests
         Assert.Equal("default", item.SelectedVariantId);
     }
 
+    [Theory]
+    [InlineData("current", "索引状态：可用", false)]
+    [InlineData("possibly-outdated", "索引状态：可能已过期", true)]
+    [InlineData("unknown", "索引状态：未收录", true)]
+    public void GameItemPresentsCatalogStatusClearly(
+        string status,
+        string expectedText,
+        bool expectedWarning)
+    {
+        using var document = JsonDocument.Parse(
+            $$"""{"app_id":"123","game_name":"Game","catalog_status":"{{status}}"}"""
+        );
+
+        var item = GameItem.FromPayload(document.RootElement);
+
+        Assert.Equal(expectedText, item.CatalogText);
+        Assert.Equal(expectedWarning, item.HasCatalogWarning);
+        if (expectedWarning)
+        {
+            Assert.NotEmpty(item.CatalogWarningText);
+        }
+    }
+
     [Fact]
     public void ReplacementPreviewScansLanguagesAndDefaultsToSimplifiedChinese()
     {

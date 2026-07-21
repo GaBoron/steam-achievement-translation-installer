@@ -110,7 +110,11 @@ def discover_library_dirs(steam_dir: Path) -> tuple[Path, ...]:
 
 
 def discover_installed_apps(steam_dir: Path) -> set[str]:
-    apps: set[str] = set()
+    return set(discover_installed_games(steam_dir))
+
+
+def discover_installed_games(steam_dir: Path) -> dict[str, str]:
+    games: dict[str, str] = {}
     for library in discover_library_dirs(steam_dir):
         steamapps = library / "steamapps"
         if not steamapps.is_dir():
@@ -120,10 +124,19 @@ def discover_installed_apps(steam_dir: Path) -> set[str]:
             for path in children:
                 match = APP_MANIFEST_RE.fullmatch(path.name)
                 if match and path.is_file():
-                    apps.add(match.group(1))
+                    app_id = match.group(1)
+                    game_name = ""
+                    try:
+                        manifest = load_vdf(path)
+                        app_state = get_casefold(manifest, "AppState", manifest)
+                        game_name = str(get_casefold(app_state, "name", "")).strip()
+                    except PreflightError:
+                        # A damaged manifest still identifies a local App ID.
+                        pass
+                    games[app_id] = game_name
         except OSError as exc:
             raise PreflightError(f"无法读取 Steam 库目录：{steamapps}：{exc}") from exc
-    return apps
+    return games
 
 
 def discover_accounts(steam_dir: Path) -> tuple[SteamAccount, ...]:
@@ -174,8 +187,8 @@ def discover_account_cached_apps(steam_dir: Path, account: SteamAccount) -> set[
 
 def discover_local_games(steam_dir: Path, account_id: str | None = None) -> dict[str, DiscoveryRecord]:
     records: dict[str, DiscoveryRecord] = {}
-    for app_id in discover_installed_apps(steam_dir):
-        records.setdefault(app_id, DiscoveryRecord(app_id)).discovery.add("installed")
+    for app_id, game_name in discover_installed_games(steam_dir).items():
+        records.setdefault(app_id, DiscoveryRecord(app_id, game_name)).discovery.add("installed")
 
     accounts = discover_accounts(steam_dir)
     if account_id:
