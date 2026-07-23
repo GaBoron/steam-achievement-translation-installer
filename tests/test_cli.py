@@ -94,6 +94,7 @@ def test_scan_json_has_stable_fields(tmp_path: Path, capsys: pytest.CaptureFixtu
         "variants",
         "installed_state",
         "installed_variant_id",
+        "native_languages",
         "action",
         "error",
     }
@@ -155,6 +156,36 @@ def test_scan_local_scope_includes_games_missing_from_catalog(tmp_path: Path, ca
     assert records[1]["catalog_status"] == "unknown"
     assert records[1]["game_name"] == "Only Local"
     assert records[1]["variants"] == []
+
+
+def test_scan_local_scope_reports_native_chinese_schema(tmp_path: Path, capsys) -> None:
+    steam, data_dir = make_fixture(tmp_path)
+    (steam / "steamapps" / "appmanifest_456.acf").write_text(
+        '"AppState" { "name" "Native Chinese Game" }', encoding="utf-8"
+    )
+    schema = steam / "appcache" / "stats" / "UserGameStatsSchema_456.bin"
+    schema.parent.mkdir(parents=True)
+    schema.write_bytes(preview_schema_bytes())
+
+    result = main(
+        [
+            "scan",
+            "--scope",
+            "local",
+            "--offline",
+            "--json",
+            "--steam-dir",
+            str(steam),
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+
+    assert result == 0
+    records = json.loads(capsys.readouterr().out)
+    native = next(record for record in records if record["app_id"] == "456")
+    assert native["catalog_status"] == "unknown"
+    assert native["native_languages"] == ["schinese", "english"]
 
 
 def test_scan_cloud_scope_lists_catalog_without_steam_directory(tmp_path: Path, capsys) -> None:

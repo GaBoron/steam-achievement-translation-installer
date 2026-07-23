@@ -13,6 +13,7 @@ from satl.catalog import CatalogRepository
 from satl.errors import CatalogError, PreflightError, SatlError, TransactionError, UsageError
 from satl.game_names import SteamGameNameResolver
 from satl.models import Catalog, CatalogEntry, SchemaVariant
+from satl.native_languages import detect_achievement_languages
 from satl.petition import export_petition_archive
 from satl.state import StateStore
 from satl.steam import discover_local_games, find_steam_dir, is_steam_running, schema_target
@@ -279,16 +280,22 @@ def command_scan(args: argparse.Namespace) -> int:
         entry = catalog.entries.get(app_id)
         discovery = discovered.get(app_id)
         sources = sorted(discovery.discovery) if discovery else []
+        installed_state = manager.status(app_id)
+        native_languages = (
+            detect_achievement_languages(schema_target(steam_dir, app_id))
+            if steam_dir is not None and installed_state in {"unmanaged", "restored"}
+            else ()
+        )
         if entry is not None:
-            records.append(
-                _record(
-                    entry,
-                    sources,
-                    manager.status(app_id),
-                    "available",
-                    manager.installed_variant_id(app_id),
-                )
+            record = _record(
+                entry,
+                sources,
+                installed_state,
+                "available",
+                manager.installed_variant_id(app_id),
             )
+            record["native_languages"] = list(native_languages)
+            records.append(record)
         else:
             game_name = discovery.game_name if discovery else ""
             records.append(
@@ -298,8 +305,9 @@ def command_scan(args: argparse.Namespace) -> int:
                     "discovery": sources,
                     "catalog_status": "unknown",
                     "variants": [],
-                    "installed_state": manager.status(app_id),
+                    "installed_state": installed_state,
                     "installed_variant_id": manager.installed_variant_id(app_id),
+                    "native_languages": list(native_languages),
                     "action": "unavailable",
                     "error": None,
                 }

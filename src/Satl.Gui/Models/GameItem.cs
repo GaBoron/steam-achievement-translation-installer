@@ -25,6 +25,7 @@ public sealed class GameItem : ObservableObject
     public required string GameName { get; init; }
     public string CatalogStatus { get; init; } = "unknown";
     public string DiscoveryText { get; init; } = string.Empty;
+    public IReadOnlyList<string> NativeLanguages { get; init; } = [];
     public ObservableCollection<SchemaVariantOption> Variants { get; } = [];
 
     public bool IsSelected
@@ -125,9 +126,16 @@ public sealed class GameItem : ObservableObject
         }
     }
     public bool IsCurrent => CatalogStatus == "current";
-    public bool HasCatalogWarning => !IsCurrent;
-    public string CatalogText => $"索引状态：{CatalogStatusPresentation.Label(CatalogStatus)}";
-    public string CatalogWarningText => CatalogStatusPresentation.Warning(CatalogStatus);
+    public bool HasNativeChinese => NativeLanguages.Any(language =>
+        language.Equals("schinese", StringComparison.OrdinalIgnoreCase)
+        || language.Equals("tchinese", StringComparison.OrdinalIgnoreCase));
+    public bool HasCatalogWarning => !IsCurrent && !HasNativeChinese;
+    public string CatalogText => HasNativeChinese
+        ? "本游戏自带中文"
+        : $"索引状态：{CatalogStatusPresentation.Label(CatalogStatus)}";
+    public string CatalogWarningText => HasNativeChinese
+        ? string.Empty
+        : CatalogStatusPresentation.Warning(CatalogStatus);
     public string Subtitle => $"App ID {AppId}" + (string.IsNullOrWhiteSpace(DiscoveryText) ? string.Empty : $" · {DiscoveryText}");
 
     public static GameItem FromPayload(JsonElement payload)
@@ -140,6 +148,7 @@ public sealed class GameItem : ObservableObject
             DiscoveryText = payload.TryGetProperty("discovery", out var discovery)
                 ? string.Join(" / ", discovery.EnumerateArray().Select(source => source.GetString()).Where(source => !string.IsNullOrWhiteSpace(source)))
                 : string.Empty,
+            NativeLanguages = GetStringArray(payload, "native_languages"),
             InstalledState = GetString(payload, "installed_state", "unmanaged"),
             InstalledVariantId = GetString(payload, "installed_variant_id", string.Empty),
         };
@@ -168,4 +177,14 @@ public sealed class GameItem : ObservableObject
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? fallback
             : fallback;
+
+    private static IReadOnlyList<string> GetStringArray(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var values) && values.ValueKind == JsonValueKind.Array
+            ? values.EnumerateArray()
+                .Where(value => value.ValueKind == JsonValueKind.String)
+                .Select(value => value.GetString())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .ToArray()
+            : [];
 }

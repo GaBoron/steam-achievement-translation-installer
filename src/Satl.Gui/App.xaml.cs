@@ -81,11 +81,28 @@ public partial class App : Application
             _mainInstance.Activated += MainInstance_Activated;
             Window = new MainWindow();
             WindowActivationService.ShowAndActivate(Window);
+            _ = CleanupCompletedUpdatesAsync();
         }
         catch (Exception exception)
         {
             LogStartupException(exception);
             throw;
+        }
+    }
+
+    private static async Task CleanupCompletedUpdatesAsync()
+    {
+        var result = await new UpdatePackageCleanupService().CleanupWithRetryAsync();
+        if (result.DeletedFiles.Count > 0)
+        {
+            await Logs.WriteAsync(
+                "信息",
+                "更新",
+                $"已清理 {result.DeletedFiles.Count} 个当前或更早版本的更新安装包。");
+        }
+        foreach (var failure in result.Failures)
+        {
+            await Logs.WriteAsync("警告", "更新", failure);
         }
     }
 

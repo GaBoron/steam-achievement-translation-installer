@@ -95,6 +95,21 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public void GameItemPresentsNativeChineseWithoutMissingTranslationWarning()
+    {
+        using var document = JsonDocument.Parse(
+            """{"app_id":"456","game_name":"Native Chinese Game","catalog_status":"unknown","native_languages":["schinese","english"]}"""
+        );
+
+        var item = GameItem.FromPayload(document.RootElement);
+
+        Assert.True(item.HasNativeChinese);
+        Assert.Equal("本游戏自带中文", item.CatalogText);
+        Assert.False(item.HasCatalogWarning);
+        Assert.Empty(item.CatalogWarningText);
+    }
+
+    [Fact]
     public void GameLoadingProgressTracksPlanLookupAndItems()
     {
         var progress = new GameLoadingProgress();
