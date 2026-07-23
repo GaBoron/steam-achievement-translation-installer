@@ -5,6 +5,12 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:Satl_Gui.Controls">
     <Page.Resources>
+        <Style x:Key="SettingsCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
         <Style x:Key="SettingsRowStyle" TargetType="Grid">
             <Setter Property="MinHeight" Value="88" />
             <Setter Property="Padding" Value="20,16" />
@@ -19,8 +25,8 @@
             </StackPanel>
 
             <TextBlock Text="路径" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
-                <StackPanel>
+            <StackPanel Spacing="8">
+                <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid Style="{StaticResource SettingsRowStyle}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -38,7 +44,8 @@
                             </StackPanel>
                         </StackPanel>
                     </Grid>
-                    <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+                </Border>
+                <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid Style="{StaticResource SettingsRowStyle}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -57,12 +64,12 @@
                             </StackPanel>
                         </StackPanel>
                     </Grid>
-                </StackPanel>
-            </Border>
+                </Border>
+            </StackPanel>
 
             <TextBlock Text="首选项" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
-                <StackPanel>
+            <StackPanel Spacing="8">
+                <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid Style="{StaticResource SettingsRowStyle}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -72,9 +79,12 @@
                             <TextBlock Text="离线模式" Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock Text="启用后仅使用本地已验证缓存，不访问在线目录。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                         </StackPanel>
-                        <ToggleSwitch x:Name="OfflineSwitch" Grid.Column="1" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="OfflineSwitch_Toggled" />
+                        <Grid Grid.Column="1" Width="160">
+                            <ToggleSwitch x:Name="OfflineSwitch" HorizontalAlignment="Right" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="OfflineSwitch_Toggled" />
+                        </Grid>
                     </Grid>
-                    <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+                </Border>
+                <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid Style="{StaticResource SettingsRowStyle}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -90,8 +100,8 @@
                             <ComboBoxItem Content="深色" Tag="dark" />
                         </ComboBox>
                     </Grid>
-                </StackPanel>
-            </Border>
+                </Border>
+            </StackPanel>
 
             <TextBlock Text="网络" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
             <controls:NetworkSettingsControl
@@ -100,8 +110,8 @@
                 TestConnectionRequested="NetworkSettingsEditor_TestConnectionRequested" />
 
             <TextBlock Text="日志" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
-                <StackPanel>
+            <StackPanel Spacing="8">
+                <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid Style="{StaticResource SettingsRowStyle}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -111,9 +121,12 @@
                             <TextBlock Text="记录运行日志" Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock Text="记录扫描、安装、恢复、缓存和异常信息，不记录成就文件内容。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                         </StackPanel>
-                        <ToggleSwitch x:Name="LoggingSwitch" Grid.Column="1" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="LoggingSwitch_Toggled" />
+                        <Grid Grid.Column="1" Width="160">
+                            <ToggleSwitch x:Name="LoggingSwitch" HorizontalAlignment="Right" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="LoggingSwitch_Toggled" />
+                        </Grid>
                     </Grid>
-                    <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+                </Border>
+                <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid Style="{StaticResource SettingsRowStyle}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -129,7 +142,8 @@
                             <ComboBoxItem Content="Debug" Tag="debug" />
                         </ComboBox>
                     </Grid>
-                    <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+                </Border>
+                <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid Style="{StaticResource SettingsRowStyle}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -139,9 +153,12 @@
                             <TextBlock Text="自动换行" Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock Text="根据窗口宽度换行显示较长的日志内容。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                         </StackPanel>
-                        <ToggleSwitch x:Name="LogWordWrapSwitch" Grid.Column="1" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="LogWordWrapSwitch_Toggled" />
+                        <Grid Grid.Column="1" Width="160">
+                            <ToggleSwitch x:Name="LogWordWrapSwitch" HorizontalAlignment="Right" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="LogWordWrapSwitch_Toggled" />
+                        </Grid>
                     </Grid>
-                    <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+                </Border>
+                <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid Style="{StaticResource SettingsRowStyle}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -160,12 +177,12 @@
                             <Button Content="打开目录" Click="OpenLogs_Click" AutomationProperties.Name="在文件资源管理器中打开日志目录" />
                         </StackPanel>
                     </Grid>
-                </StackPanel>
-            </Border>
+                </Border>
+            </StackPanel>
 
             <TextBlock Text="软件更新" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
-                <StackPanel>
+            <StackPanel Spacing="8">
+                <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid Style="{StaticResource SettingsRowStyle}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -175,9 +192,12 @@
                             <TextBlock Text="启动时检查更新" Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock Text="启动后检查 GitHub Releases；发现新版本时显示发布说明和下载按钮。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                         </StackPanel>
-                        <ToggleSwitch x:Name="UpdateCheckSwitch" Grid.Column="1" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="UpdateCheckSwitch_Toggled" />
+                        <Grid Grid.Column="1" Width="160">
+                            <ToggleSwitch x:Name="UpdateCheckSwitch" HorizontalAlignment="Right" VerticalAlignment="Center" OffContent="关" OnContent="开" Toggled="UpdateCheckSwitch_Toggled" />
+                        </Grid>
                     </Grid>
-                    <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+                </Border>
+                <Border Style="{StaticResource SettingsCardStyle}">
                     <Grid Style="{StaticResource SettingsRowStyle}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -192,11 +212,11 @@
                             <Button x:Name="OpenReleaseButton" Content="打开发布页" Click="OpenRelease_Click" Visibility="Collapsed" AutomationProperties.Name="打开 GitHub Release 发布页" />
                         </StackPanel>
                     </Grid>
-                </StackPanel>
-            </Border>
+                </Border>
+            </StackPanel>
 
             <TextBlock Text="维护" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+            <Border Style="{StaticResource SettingsCardStyle}">
                 <Grid Style="{StaticResource SettingsRowStyle}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -211,7 +231,7 @@
             </Border>
 
             <TextBlock Text="关于" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+            <Border Style="{StaticResource SettingsCardStyle}">
                 <Grid Style="{StaticResource SettingsRowStyle}">
                     <StackPanel VerticalAlignment="Center" Spacing="3">
                         <TextBlock Text="Steam 成就翻译安装器" Style="{StaticResource BodyStrongTextBlockStyle}" />
