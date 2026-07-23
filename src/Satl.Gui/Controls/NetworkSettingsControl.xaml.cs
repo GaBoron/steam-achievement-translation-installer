@@ -70,8 +70,6 @@ public sealed partial class NetworkSettingsControl : UserControl
         ManualProxyPanel.Visibility = proxyMode == "manual"
             ? Visibility.Visible
             : Visibility.Collapsed;
-        NetworkSummaryText.Text =
-            $"DNS：{(customDns ? "自定义" : "跟随系统")} · 代理：{ProxyModeDescription(proxyMode)}";
     }
 
     private void NotifyChanged()
@@ -85,10 +83,4 @@ public sealed partial class NetworkSettingsControl : UserControl
     private static string SelectedTag(ComboBox box, string fallback) =>
         (box.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? fallback;
 
-    private static string ProxyModeDescription(string mode) => mode switch
-    {
-        "direct" => "直连",
-        "manual" => "手动",
-        _ => "跟随系统",
-    };
 }
