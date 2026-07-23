@@ -35,6 +35,7 @@ public sealed partial class SettingsPage : Page
         LogRetentionBox.SelectedIndex = ViewModel.Settings.LogRetentionDays switch { 7 => 0, 90 => 2, _ => 1 };
         LogWordWrapSwitch.IsOn = ViewModel.Settings.LogWordWrap;
         UpdateCheckSwitch.IsOn = ViewModel.Settings.CheckForUpdatesOnStartup;
+        RefreshToggleStateLabels();
         NetworkSettingsEditor.LoadSettings(ViewModel.Settings.Network);
         UpdateStatusText.Text = $"当前版本 v{UpdateService.CurrentVersionText}。";
         AboutVersionText.Text = $"版本 {UpdateService.CurrentVersionText} · Windows 10/11 x64";
@@ -138,6 +139,7 @@ public sealed partial class SettingsPage : Page
 
     private async void OfflineSwitch_Toggled(object sender, RoutedEventArgs e)
     {
+        UpdateToggleStateText(OfflineSwitch, OfflineStateText);
         if (!_isInitializing)
         {
             await ApplySettingsAsync();
@@ -154,6 +156,7 @@ public sealed partial class SettingsPage : Page
 
     private async void LoggingSwitch_Toggled(object sender, RoutedEventArgs e)
     {
+        UpdateToggleStateText(LoggingSwitch, LoggingStateText);
         if (!_isInitializing)
         {
             await ApplySettingsAsync();
@@ -210,6 +213,7 @@ public sealed partial class SettingsPage : Page
 
     private async void LogWordWrapSwitch_Toggled(object sender, RoutedEventArgs e)
     {
+        UpdateToggleStateText(LogWordWrapSwitch, LogWordWrapStateText);
         if (!_isInitializing)
         {
             await ApplySettingsAsync();
@@ -218,10 +222,24 @@ public sealed partial class SettingsPage : Page
 
     private async void UpdateCheckSwitch_Toggled(object sender, RoutedEventArgs e)
     {
+        UpdateToggleStateText(UpdateCheckSwitch, UpdateCheckStateText);
         if (!_isInitializing)
         {
             await ApplySettingsAsync();
         }
+    }
+
+    private void RefreshToggleStateLabels()
+    {
+        UpdateToggleStateText(OfflineSwitch, OfflineStateText);
+        UpdateToggleStateText(LoggingSwitch, LoggingStateText);
+        UpdateToggleStateText(LogWordWrapSwitch, LogWordWrapStateText);
+        UpdateToggleStateText(UpdateCheckSwitch, UpdateCheckStateText);
+    }
+
+    private static void UpdateToggleStateText(ToggleSwitch toggleSwitch, TextBlock stateText)
+    {
+        stateText.Text = toggleSwitch.IsOn ? "开" : "关";
     }
 
     private async void NetworkSettingsEditor_SettingsChanged(object? sender, EventArgs e)
