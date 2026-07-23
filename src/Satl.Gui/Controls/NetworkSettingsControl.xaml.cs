@@ -21,7 +21,6 @@ public sealed partial class NetworkSettingsControl : UserControl
         _isInitializing = true;
         DnsModeBox.SelectedIndex = settings.DnsMode == "custom" ? 1 : 0;
         DnsServersBox.Text = settings.DnsServers;
-        DnsTimeoutBox.Value = settings.DnsTimeoutSeconds;
         ProxyModeBox.SelectedIndex = settings.ProxyMode switch
         {
             "direct" => 1,
@@ -31,9 +30,6 @@ public sealed partial class NetworkSettingsControl : UserControl
         ProxyAddressBox.Text = settings.ProxyAddress;
         ProxyUsernameBox.Text = settings.ProxyUsername;
         ProxyPasswordBox.Password = settings.ProxyPassword;
-        ProxyBypassBox.Text = settings.ProxyBypassList;
-        ProxyBypassLocalSwitch.IsOn = settings.ProxyBypassLocal;
-        ConnectTimeoutBox.Value = settings.ConnectTimeoutSeconds;
         UpdateFieldAvailability();
         _isInitializing = false;
     }
@@ -42,14 +38,10 @@ public sealed partial class NetworkSettingsControl : UserControl
     {
         DnsMode = SelectedTag(DnsModeBox, "system"),
         DnsServers = DnsServersBox.Text,
-        DnsTimeoutSeconds = IntegerValue(DnsTimeoutBox, 5),
         ProxyMode = SelectedTag(ProxyModeBox, "system"),
         ProxyAddress = ProxyAddressBox.Text,
         ProxyUsername = ProxyUsernameBox.Text,
         ProxyPassword = ProxyPasswordBox.Password,
-        ProxyBypassList = ProxyBypassBox.Text,
-        ProxyBypassLocal = ProxyBypassLocalSwitch.IsOn,
-        ConnectTimeoutSeconds = IntegerValue(ConnectTimeoutBox, 15),
     };
 
     public void SetTestState(bool isRunning, string message)
@@ -67,22 +59,19 @@ public sealed partial class NetworkSettingsControl : UserControl
 
     private void Field_LostFocus(object sender, RoutedEventArgs e) => NotifyChanged();
 
-    private void ToggleSwitch_Toggled(object sender, RoutedEventArgs e) => NotifyChanged();
-
-    private void NumberBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) =>
-        NotifyChanged();
-
     private void TestConnectionButton_Click(object sender, RoutedEventArgs e) =>
         TestConnectionRequested?.Invoke(this, EventArgs.Empty);
 
     private void UpdateFieldAvailability()
     {
         var customDns = SelectedTag(DnsModeBox, "system") == "custom";
-        CustomDnsPanel.IsHitTestVisible = customDns;
-        CustomDnsPanel.Opacity = customDns ? 1 : 0.55;
-        var manualProxy = SelectedTag(ProxyModeBox, "system") == "manual";
-        ManualProxyPanel.IsHitTestVisible = manualProxy;
-        ManualProxyPanel.Opacity = manualProxy ? 1 : 0.55;
+        CustomDnsPanel.Visibility = customDns ? Visibility.Visible : Visibility.Collapsed;
+        var proxyMode = SelectedTag(ProxyModeBox, "system");
+        ManualProxyPanel.Visibility = proxyMode == "manual"
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        NetworkSummaryText.Text =
+            $"DNS：{(customDns ? "自定义" : "跟随系统")} · 代理：{ProxyModeDescription(proxyMode)}";
     }
 
     private void NotifyChanged()
@@ -96,6 +85,10 @@ public sealed partial class NetworkSettingsControl : UserControl
     private static string SelectedTag(ComboBox box, string fallback) =>
         (box.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? fallback;
 
-    private static int IntegerValue(NumberBox box, int fallback) =>
-        double.IsNaN(box.Value) ? fallback : (int)Math.Round(box.Value);
+    private static string ProxyModeDescription(string mode) => mode switch
+    {
+        "direct" => "直连",
+        "manual" => "手动",
+        _ => "跟随系统",
+    };
 }

@@ -74,14 +74,10 @@ public sealed class SettingsService
                     {
                         DnsMode = network.DnsMode,
                         DnsServers = network.DnsServers,
-                        DnsTimeoutSeconds = network.DnsTimeoutSeconds,
                         ProxyMode = network.ProxyMode,
                         ProxyAddress = network.ProxyAddress,
                         ProxyUsername = network.ProxyUsername,
                         ProtectedProxyPassword = ProtectPassword(network.ProxyPassword),
-                        ProxyBypassList = network.ProxyBypassList,
-                        ProxyBypassLocal = network.ProxyBypassLocal,
-                        ConnectTimeoutSeconds = network.ConnectTimeoutSeconds,
                     },
                 };
                 await JsonSerializer.SerializeAsync(

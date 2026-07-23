@@ -809,8 +809,7 @@ public sealed class MainViewModel : ObservableObject
         $"DnsMode={settings.Network.DnsMode}; DnsServers={settings.Network.DnsServers}; " +
         $"ProxyMode={settings.Network.ProxyMode}; ProxyAddress={settings.Network.ProxyAddress}; " +
         $"ProxyUsernameConfigured={!string.IsNullOrEmpty(settings.Network.ProxyUsername)}; " +
-        $"ProxyPasswordConfigured={!string.IsNullOrEmpty(settings.Network.ProxyPassword)}; " +
-        $"ConnectTimeoutSeconds={settings.Network.ConnectTimeoutSeconds}";
+        $"ProxyPasswordConfigured={!string.IsNullOrEmpty(settings.Network.ProxyPassword)}";
 
     private void ShowException(string operation, Exception exception)
     {

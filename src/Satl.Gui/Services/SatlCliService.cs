@@ -185,14 +185,10 @@ public sealed class SatlCliService
         var settings = NetworkSettingsValidator.Normalize(rawSettings);
         startInfo.Environment["SATL_DNS_MODE"] = settings.DnsMode;
         startInfo.Environment["SATL_DNS_SERVERS"] = settings.DnsServers;
-        startInfo.Environment["SATL_DNS_TIMEOUT"] = settings.DnsTimeoutSeconds.ToString();
         startInfo.Environment["SATL_PROXY_MODE"] = settings.ProxyMode;
         startInfo.Environment["SATL_PROXY_ADDRESS"] = settings.ProxyAddress;
         startInfo.Environment["SATL_PROXY_USERNAME"] = settings.ProxyUsername;
         startInfo.Environment["SATL_PROXY_PASSWORD"] = settings.ProxyPassword;
-        startInfo.Environment["SATL_PROXY_BYPASS"] = settings.ProxyBypassList;
-        startInfo.Environment["SATL_PROXY_BYPASS_LOCAL"] = settings.ProxyBypassLocal ? "1" : "0";
-        startInfo.Environment["SATL_CONNECT_TIMEOUT"] = settings.ConnectTimeoutSeconds.ToString();
     }
 
     private sealed record LaunchInfo(

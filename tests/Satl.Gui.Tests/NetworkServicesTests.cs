@@ -19,7 +19,6 @@ public sealed class NetworkServicesTests
             ProxyAddress = "http://127.0.0.1:7890",
             ProxyUsername = "user",
             ProxyPassword = "secret",
-            ProxyBypassList = "localhost; *.example.com",
         });
 
         Assert.Equal("custom", normalized.DnsMode);
@@ -93,6 +92,9 @@ public sealed class NetworkServicesTests
             var loaded = await service.LoadAsync();
 
             Assert.DoesNotContain("top-secret", serialized);
+            Assert.DoesNotContain("ProxyBypass", serialized);
+            Assert.DoesNotContain("ConnectTimeout", serialized);
+            Assert.DoesNotContain("DnsTimeout", serialized);
             Assert.Equal("top-secret", loaded.Network.ProxyPassword);
         }
         finally

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net;
 using Satl_Gui.Models;
 
@@ -40,15 +39,11 @@ public static class NetworkSettingsValidator
         {
             DnsMode = dnsMode,
             DnsServers = dnsServers,
-            DnsTimeoutSeconds = RequireRange(settings.DnsTimeoutSeconds, 1, 30, "DNS 超时"),
             ProxyMode = proxyMode,
             ProxyAddress = proxyAddress,
             ProxyUsername = settings.ProxyUsername.Trim(),
             ProxyPassword = settings.ProxyPassword,
             ProtectedProxyPassword = settings.ProtectedProxyPassword,
-            ProxyBypassList = NormalizeList(settings.ProxyBypassList),
-            ProxyBypassLocal = settings.ProxyBypassLocal,
-            ConnectTimeoutSeconds = RequireRange(settings.ConnectTimeoutSeconds, 3, 120, "连接超时"),
         };
     }
 
@@ -65,9 +60,6 @@ public static class NetworkSettingsValidator
         }
         return endpoints;
     }
-
-    public static IReadOnlyList<string> ParseBypassList(string value) =>
-        value.Split(ListSeparators, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
     private static DnsServerEndpoint ParseDnsServer(string value)
     {
@@ -106,17 +98,4 @@ public static class NetworkSettingsValidator
         throw new ArgumentException($"{description}无效。");
     }
 
-    private static int RequireRange(int value, int minimum, int maximum, string description)
-    {
-        if (value < minimum || value > maximum)
-        {
-            throw new ArgumentOutOfRangeException(
-                description,
-                string.Create(CultureInfo.CurrentCulture, $"{description}必须在 {minimum} 到 {maximum} 秒之间。"));
-        }
-        return value;
-    }
-
-    private static string NormalizeList(string value) =>
-        string.Join("; ", ParseBypassList(value));
 }

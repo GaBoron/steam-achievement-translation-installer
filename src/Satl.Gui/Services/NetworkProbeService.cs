@@ -28,7 +28,7 @@ public sealed class NetworkProbeService
             using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
             request.Headers.UserAgent.ParseAdd("SATLInstaller/NetworkTest");
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(settings.ConnectTimeoutSeconds, 10)));
+            timeout.CancelAfter(TimeSpan.FromSeconds(15));
             try
             {
                 using var response = await client.SendAsync(

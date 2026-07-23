@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Sockets;
-using System.Text.RegularExpressions;
 using Satl_Gui.Models;
 
 namespace Satl_Gui.Services;
@@ -13,7 +12,7 @@ public static class NetworkHttpClientFactory
         var handler = new SocketsHttpHandler
         {
             AutomaticDecompression = DecompressionMethods.All,
-            ConnectTimeout = TimeSpan.FromSeconds(settings.ConnectTimeoutSeconds),
+            ConnectTimeout = TimeSpan.FromSeconds(15),
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
             UseProxy = settings.ProxyMode != "direct",
         };
@@ -22,10 +21,7 @@ public static class NetworkHttpClientFactory
         {
             var proxy = new WebProxy(new Uri(settings.ProxyAddress))
             {
-                BypassProxyOnLocal = settings.ProxyBypassLocal,
-                BypassList = NetworkSettingsValidator.ParseBypassList(settings.ProxyBypassList)
-                    .Select(BypassPattern)
-                    .ToArray(),
+                BypassProxyOnLocal = false,
             };
             if (!string.IsNullOrEmpty(settings.ProxyUsername))
             {
@@ -38,7 +34,7 @@ public static class NetworkHttpClientFactory
         {
             var resolver = new CustomDnsResolver(
                 NetworkSettingsValidator.ParseDnsServers(settings.DnsServers),
-                TimeSpan.FromSeconds(settings.DnsTimeoutSeconds));
+                TimeSpan.FromSeconds(5));
             handler.ConnectCallback = async (context, cancellationToken) =>
             {
                 var addresses = await resolver.ResolveAsync(context.DnsEndPoint.Host, cancellationToken);
@@ -77,9 +73,4 @@ public static class NetworkHttpClientFactory
         };
     }
 
-    private static string BypassPattern(string pattern)
-    {
-        var escaped = Regex.Escape(pattern).Replace("\\*", ".*");
-        return $"^{escaped}$";
-    }
 }
