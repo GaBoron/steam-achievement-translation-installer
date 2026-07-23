@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="Satl_Gui.Controls.NetworkSettingsControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border
+        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+        BorderThickness="1"
+        CornerRadius="8">
+        <StackPanel>
+            <Grid MinHeight="88" Padding="20,16" ColumnSpacing="32">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="400" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Spacing="3">
+                    <TextBlock Text="DNS 解析" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock
+                        Text="默认使用 Windows DNS；也可以指定一个或多个 DNS 服务器，按顺序尝试。"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="8">
+                    <ComboBox
+                        x:Name="DnsModeBox"
+                        HorizontalAlignment="Stretch"
+                        SelectionChanged="ModeBox_SelectionChanged">
+                        <ComboBoxItem Content="跟随系统" Tag="system" />
+                        <ComboBoxItem Content="自定义 DNS" Tag="custom" />
+                    </ComboBox>
+                    <StackPanel x:Name="CustomDnsPanel" Spacing="8">
+                        <TextBox
+                            x:Name="DnsServersBox"
+                            Header="DNS 服务器"
+                            PlaceholderText="1.1.1.1; 8.8.8.8"
+                            LostFocus="Field_LostFocus"
+                            AutomationProperties.Name="自定义 DNS 服务器" />
+                        <TextBlock
+                            Text="用分号分隔；支持 IPv4、IPv6 和自定义端口，例如 [2606:4700:4700::1111]:53。"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            FontSize="12"
+                            TextWrapping="Wrap" />
+                        <NumberBox
+                            x:Name="DnsTimeoutBox"
+                            Header="单个 DNS 服务器超时（秒）"
+                            Minimum="1"
+                            Maximum="30"
+                            SmallChange="1"
+                            SpinButtonPlacementMode="Compact"
+                            ValueChanged="NumberBox_ValueChanged" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+
+            <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+
+            <Grid MinHeight="88" Padding="20,16" ColumnSpacing="32">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="400" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Spacing="3">
+                    <TextBlock Text="网络代理" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock
+                        Text="系统代理会读取 Windows 设置；直连完全绕过代理；手动代理同时用于翻译下载和软件更新。"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="8">
+                    <ComboBox
+                        x:Name="ProxyModeBox"
+                        HorizontalAlignment="Stretch"
+                        SelectionChanged="ModeBox_SelectionChanged">
+                        <ComboBoxItem Content="跟随系统" Tag="system" />
+                        <ComboBoxItem Content="不使用代理（直连）" Tag="direct" />
+                        <ComboBoxItem Content="手动代理" Tag="manual" />
+                    </ComboBox>
+                    <StackPanel x:Name="ManualProxyPanel" Spacing="8">
+                        <TextBox
+                            x:Name="ProxyAddressBox"
+                            Header="代理地址"
+                            PlaceholderText="http://127.0.0.1:7890"
+                            LostFocus="Field_LostFocus"
+                            AutomationProperties.Name="手动代理地址" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox
+                                x:Name="ProxyUsernameBox"
+                                Header="用户名（可选）"
+                                LostFocus="Field_LostFocus" />
+                            <PasswordBox
+                                x:Name="ProxyPasswordBox"
+                                Grid.Column="1"
+                                Header="密码（可选）"
+                                LostFocus="Field_LostFocus" />
+                        </Grid>
+                        <TextBox
+                            x:Name="ProxyBypassBox"
+                            Header="不走代理的地址（可选）"
+                            PlaceholderText="localhost; 127.0.0.1; *.example.com"
+                            LostFocus="Field_LostFocus" />
+                        <ToggleSwitch
+                            x:Name="ProxyBypassLocalSwitch"
+                            Header="本地网络地址不走代理"
+                            OffContent="关"
+                            OnContent="开"
+                            Toggled="ToggleSwitch_Toggled" />
+                        <TextBlock
+                            Text="代理密码使用当前 Windows 账户加密后保存，不会写入日志。"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            FontSize="12"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+
+            <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" Margin="20,0" />
+
+            <Grid MinHeight="88" Padding="20,16" ColumnSpacing="32">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="400" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Spacing="3">
+                    <TextBlock Text="连接超时" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock
+                        Text="在网络不可达时等待建立连接的最长时间。下载开始后不受此项限制。"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="8">
+                    <NumberBox
+                        x:Name="ConnectTimeoutBox"
+                        Minimum="3"
+                        Maximum="120"
+                        SmallChange="1"
+                        SpinButtonPlacementMode="Compact"
+                        ValueChanged="NumberBox_ValueChanged" />
+                    <Button
+                        x:Name="TestConnectionButton"
+                        Content="测试网络连接"
+                        HorizontalAlignment="Right"
+                        Click="TestConnectionButton_Click"
+                        AutomationProperties.Name="测试翻译源和更新源的网络连接" />
+                    <TextBlock
+                        x:Name="TestStatusText"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Satl_Gui.Models;
 using Satl_Gui.Serialization;
@@ -6,6 +8,8 @@ namespace Satl_Gui.Services;
 
 public sealed class SettingsService
 {
+    private static readonly byte[] PasswordEntropy =
+        Encoding.UTF8.GetBytes("SATLInstaller.ProxyPassword.v1");
     private readonly string _path;
 
     public SettingsService(string? path = null)
@@ -32,6 +36,7 @@ public sealed class SettingsService
                 stream,
                 SatlJsonSerializerContext.Default.GuiSettings) ?? new GuiSettings();
             settings.LogLevel = PersistentLogLevel(settings.LogLevel);
+            settings.Network = LoadNetworkSettings(settings.Network);
             return settings;
         }
         catch (JsonException)
@@ -53,6 +58,7 @@ public sealed class SettingsService
         {
             await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
+                var network = NetworkSettingsValidator.Normalize(settings.Network);
                 var persistentSettings = new GuiSettings
                 {
                     SteamDirectory = settings.SteamDirectory,
@@ -64,6 +70,19 @@ public sealed class SettingsService
                     LogRetentionDays = settings.LogRetentionDays,
                     LogWordWrap = settings.LogWordWrap,
                     CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup,
+                    Network = new NetworkSettings
+                    {
+                        DnsMode = network.DnsMode,
+                        DnsServers = network.DnsServers,
+                        DnsTimeoutSeconds = network.DnsTimeoutSeconds,
+                        ProxyMode = network.ProxyMode,
+                        ProxyAddress = network.ProxyAddress,
+                        ProxyUsername = network.ProxyUsername,
+                        ProtectedProxyPassword = ProtectPassword(network.ProxyPassword),
+                        ProxyBypassList = network.ProxyBypassList,
+                        ProxyBypassLocal = network.ProxyBypassLocal,
+                        ConnectTimeoutSeconds = network.ConnectTimeoutSeconds,
+                    },
                 };
                 await JsonSerializer.SerializeAsync(
                     stream,
@@ -85,4 +104,52 @@ public sealed class SettingsService
         "debug" => "detailed",
         _ => "standard",
     };
+
+    private static NetworkSettings LoadNetworkSettings(NetworkSettings? stored)
+    {
+        stored ??= new NetworkSettings();
+        try
+        {
+            stored.ProxyPassword = UnprotectPassword(stored.ProtectedProxyPassword);
+            return NetworkSettingsValidator.Normalize(stored);
+        }
+        catch (ArgumentException)
+        {
+            return new NetworkSettings();
+        }
+    }
+
+    private static string ProtectPassword(string password)
+    {
+        if (string.IsNullOrEmpty(password))
+        {
+            return string.Empty;
+        }
+        var protectedBytes = ProtectedData.Protect(
+            Encoding.UTF8.GetBytes(password),
+            PasswordEntropy,
+            DataProtectionScope.CurrentUser);
+        return Convert.ToBase64String(protectedBytes);
+    }
+
+    private static string UnprotectPassword(string protectedPassword)
+    {
+        if (string.IsNullOrWhiteSpace(protectedPassword))
+        {
+            return string.Empty;
+        }
+        try
+        {
+            var clearBytes = ProtectedData.Unprotect(
+                Convert.FromBase64String(protectedPassword),
+                PasswordEntropy,
+                DataProtectionScope.CurrentUser);
+            return Encoding.UTF8.GetString(clearBytes);
+        }
+        catch (Exception exception) when (
+            exception is CryptographicException or FormatException)
+        {
+            return string.Empty;
+        }
+    }
 }

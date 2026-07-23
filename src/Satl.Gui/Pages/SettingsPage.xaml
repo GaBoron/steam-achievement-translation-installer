@@ -2,7 +2,8 @@
 <Page
     x:Class="Satl_Gui.Pages.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Satl_Gui.Controls">
     <Page.Resources>
         <Style x:Key="SettingsRowStyle" TargetType="Grid">
             <Setter Property="MinHeight" Value="88" />
@@ -91,6 +92,12 @@
                     </Grid>
                 </StackPanel>
             </Border>
+
+            <TextBlock Text="网络" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
+            <controls:NetworkSettingsControl
+                x:Name="NetworkSettingsEditor"
+                SettingsChanged="NetworkSettingsEditor_SettingsChanged"
+                TestConnectionRequested="NetworkSettingsEditor_TestConnectionRequested" />
 
             <TextBlock Text="日志" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,12,0,0" />
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">

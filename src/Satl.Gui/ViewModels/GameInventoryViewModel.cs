@@ -68,7 +68,10 @@ public sealed class GameInventoryViewModel(GameInventoryScope scope) : Observabl
         try
         {
             var arguments = BuildArguments();
-            var result = await _cli.RunAsync(arguments, HandleEvent);
+            var result = await _cli.RunAsync(
+                arguments,
+                HandleEvent,
+                networkSettings: App.ViewModel.Settings.Network);
             if (!result.IsSuccess)
             {
                 throw new InvalidOperationException(result.ErrorMessage);

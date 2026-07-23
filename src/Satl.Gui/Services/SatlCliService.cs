@@ -11,7 +11,8 @@ public sealed class SatlCliService
     public async Task<CliRunResult> RunAsync(
         IEnumerable<string> arguments,
         Action<SatlEvent>? onEvent = null,
-        Action<string>? onDiagnostic = null)
+        Action<string>? onDiagnostic = null,
+        NetworkSettings? networkSettings = null)
     {
         var argumentList = arguments.ToList();
         onDiagnostic?.Invoke($"步骤 1：解析 CLI 启动目标。请求参数={FormatArguments(argumentList)}");
@@ -44,6 +45,7 @@ public sealed class SatlCliService
         }
         startInfo.Environment["PYTHONUTF8"] = "1";
         startInfo.Environment["PYTHONIOENCODING"] = "utf-8";
+        ApplyNetworkEnvironment(startInfo, networkSettings);
         onDiagnostic?.Invoke(
             $"步骤 3：进程启动信息已组装。完整参数={FormatArguments(startInfo.ArgumentList)}；" +
             "标准输出/标准错误=UTF-8 重定向；隐藏控制台窗口=True。");
@@ -175,6 +177,23 @@ public sealed class SatlCliService
             arguments.Select(argument => JsonSerializer.Serialize(
                 argument,
                 SatlJsonSerializerContext.Default.String)));
+
+    private static void ApplyNetworkEnvironment(
+        ProcessStartInfo startInfo,
+        NetworkSettings? rawSettings)
+    {
+        var settings = NetworkSettingsValidator.Normalize(rawSettings);
+        startInfo.Environment["SATL_DNS_MODE"] = settings.DnsMode;
+        startInfo.Environment["SATL_DNS_SERVERS"] = settings.DnsServers;
+        startInfo.Environment["SATL_DNS_TIMEOUT"] = settings.DnsTimeoutSeconds.ToString();
+        startInfo.Environment["SATL_PROXY_MODE"] = settings.ProxyMode;
+        startInfo.Environment["SATL_PROXY_ADDRESS"] = settings.ProxyAddress;
+        startInfo.Environment["SATL_PROXY_USERNAME"] = settings.ProxyUsername;
+        startInfo.Environment["SATL_PROXY_PASSWORD"] = settings.ProxyPassword;
+        startInfo.Environment["SATL_PROXY_BYPASS"] = settings.ProxyBypassList;
+        startInfo.Environment["SATL_PROXY_BYPASS_LOCAL"] = settings.ProxyBypassLocal ? "1" : "0";
+        startInfo.Environment["SATL_CONNECT_TIMEOUT"] = settings.ConnectTimeoutSeconds.ToString();
+    }
 
     private sealed record LaunchInfo(
         string FileName,

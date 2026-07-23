@@ -11,4 +11,5 @@ public sealed class GuiSettings
     public int LogRetentionDays { get; set; } = 30;
     public bool LogWordWrap { get; set; } = true;
     public bool CheckForUpdatesOnStartup { get; set; } = true;
+    public NetworkSettings Network { get; set; } = new();
 }

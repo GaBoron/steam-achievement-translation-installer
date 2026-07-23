@@ -35,6 +35,7 @@ public sealed partial class SettingsPage : Page
         LogRetentionBox.SelectedIndex = ViewModel.Settings.LogRetentionDays switch { 7 => 0, 90 => 2, _ => 1 };
         LogWordWrapSwitch.IsOn = ViewModel.Settings.LogWordWrap;
         UpdateCheckSwitch.IsOn = ViewModel.Settings.CheckForUpdatesOnStartup;
+        NetworkSettingsEditor.LoadSettings(ViewModel.Settings.Network);
         UpdateStatusText.Text = $"当前版本 v{UpdateService.CurrentVersionText}。";
         AboutVersionText.Text = $"版本 {UpdateService.CurrentVersionText} · Windows 10/11 x64";
         OpenReleaseButton.Visibility = ViewModel.LatestReleasePage is null ? Visibility.Collapsed : Visibility.Visible;
@@ -63,6 +64,7 @@ public sealed partial class SettingsPage : Page
                 LogRetentionDays = retention,
                 LogWordWrap = LogWordWrapSwitch.IsOn,
                 CheckForUpdatesOnStartup = UpdateCheckSwitch.IsOn,
+                Network = NetworkSettingsEditor.ReadSettings(),
             });
             RefreshDirectoryLabels();
         }
@@ -219,6 +221,34 @@ public sealed partial class SettingsPage : Page
         if (!_isInitializing)
         {
             await ApplySettingsAsync();
+        }
+    }
+
+    private async void NetworkSettingsEditor_SettingsChanged(object? sender, EventArgs e)
+    {
+        if (!_isInitializing)
+        {
+            await ApplySettingsAsync();
+        }
+    }
+
+    private async void NetworkSettingsEditor_TestConnectionRequested(object? sender, EventArgs e)
+    {
+        NetworkSettingsEditor.SetTestState(true, "正在连接翻译目录和软件更新服务…");
+        try
+        {
+            var settings = NetworkSettingsValidator.Normalize(NetworkSettingsEditor.ReadSettings());
+            var result = await ViewModel.TestNetworkAsync(settings);
+            NetworkSettingsEditor.SetTestState(false, result.Message);
+        }
+        catch (Exception exception)
+        {
+            _ = App.Logs.WriteAsync("调试", "网络测试", exception.ToString(), debug: true);
+            var message = exception is ArgumentException
+                ? exception.Message
+                : NetworkErrorMessage.Describe(exception, "测试网络连接");
+            NetworkSettingsEditor.SetTestState(false, message);
+            ViewModel.ShowInfo(message, InfoBarSeverity.Warning);
         }
     }
 

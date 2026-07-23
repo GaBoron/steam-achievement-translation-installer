@@ -13,6 +13,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly SatlCliService _cli = new();
     private readonly SettingsService _settingsService = new();
     private readonly UpdateService _updateService = new();
+    private readonly NetworkProbeService _networkProbeService = new();
     private string _searchText = string.Empty;
     private bool _isBusy;
     private string _statusMessage = "准备就绪";
@@ -85,6 +86,7 @@ public sealed class MainViewModel : ObservableObject
     public async Task InitializeAsync()
     {
         Settings = await _settingsService.LoadAsync();
+        _updateService.ConfigureNetwork(Settings.Network);
         OnPropertyChanged(nameof(Settings));
         App.Logs.Configure(Settings.LoggingEnabled, Settings.LogLevel, Settings.LogRetentionDays);
         await App.Logs.WriteAsync("信息", "应用", "设置已加载，开始初始化。");
@@ -286,6 +288,24 @@ public sealed class MainViewModel : ObservableObject
     public Task<UpdateCheckResult?> CheckForUpdatesAsync() =>
         CheckForUpdatesCoreAsync(showCurrentResult: true);
 
+    public async Task<NetworkProbeResult> TestNetworkAsync(NetworkSettings settings)
+    {
+        var normalized = NetworkSettingsValidator.Normalize(settings);
+        await App.Logs.WriteAsync(
+            "信息",
+            "网络测试",
+            $"开始测试连接。DNS={normalized.DnsMode}；代理={normalized.ProxyMode}。");
+        var result = await _networkProbeService.TestAsync(normalized);
+        await App.Logs.WriteAsync(
+            result.IsSuccess ? "信息" : "警告",
+            "网络测试",
+            result.Message);
+        ShowInfo(
+            result.Message,
+            result.IsSuccess ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+        return result;
+    }
+
     private async Task<UpdateCheckResult?> CheckForUpdatesCoreAsync(bool showCurrentResult)
     {
         if (IsBusy)
@@ -332,7 +352,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            var message = $"无法检查软件更新：{exception.Message}";
+            var message = NetworkErrorMessage.Describe(exception, "检查软件更新");
             await App.Logs.WriteAsync("警告", "更新", message);
             await App.Logs.WriteAsync(
                 "调试",
@@ -354,6 +374,7 @@ public sealed class MainViewModel : ObservableObject
 
     public async Task UpdateSettingsAsync(GuiSettings settings)
     {
+        settings.Network = NetworkSettingsValidator.Normalize(settings.Network);
         var previous = Settings;
         var enablingDebug = settings.LoggingEnabled
             && settings.LogLevel == "debug"
@@ -365,6 +386,7 @@ public sealed class MainViewModel : ObservableObject
             debug: true);
         await _settingsService.SaveAsync(settings);
         Settings = settings;
+        _updateService.ConfigureNetwork(settings.Network);
         OnPropertyChanged(nameof(Settings));
         OnPropertyChanged(nameof(CurrentSteamDirectory));
         OnPropertyChanged(nameof(CurrentDataDirectory));
@@ -586,7 +608,7 @@ public sealed class MainViewModel : ObservableObject
                 {
                     App.DispatcherQueue.TryEnqueue(() => ShowInfo(warning.GetString() ?? "正在使用本地缓存。"));
                 }
-            }, diagnostic);
+            }, diagnostic, Settings.Network);
         }
         catch (Exception exception)
         {
@@ -783,12 +805,20 @@ public sealed class MainViewModel : ObservableObject
         $"SteamDirectory={settings.SteamDirectory}; DataDirectory={settings.DataDirectory}; Offline={settings.Offline}; " +
         $"Theme={settings.Theme}; LoggingEnabled={settings.LoggingEnabled}; LogLevel={settings.LogLevel}; " +
         $"LogRetentionDays={settings.LogRetentionDays}; LogWordWrap={settings.LogWordWrap}; " +
-        $"CheckForUpdatesOnStartup={settings.CheckForUpdatesOnStartup}";
+        $"CheckForUpdatesOnStartup={settings.CheckForUpdatesOnStartup}; " +
+        $"DnsMode={settings.Network.DnsMode}; DnsServers={settings.Network.DnsServers}; " +
+        $"ProxyMode={settings.Network.ProxyMode}; ProxyAddress={settings.Network.ProxyAddress}; " +
+        $"ProxyUsernameConfigured={!string.IsNullOrEmpty(settings.Network.ProxyUsername)}; " +
+        $"ProxyPasswordConfigured={!string.IsNullOrEmpty(settings.Network.ProxyPassword)}; " +
+        $"ConnectTimeoutSeconds={settings.Network.ConnectTimeoutSeconds}";
 
     private void ShowException(string operation, Exception exception)
     {
         _ = App.Logs.WriteAsync("调试", operation, exception.ToString(), debug: true);
-        ShowInfo(exception.Message, InfoBarSeverity.Error);
+        var message = NetworkErrorMessage.IsNetworkError(exception)
+            ? NetworkErrorMessage.Describe(exception, operation)
+            : exception.Message;
+        ShowInfo(message, InfoBarSeverity.Error);
     }
 
     private void ShowResultError(CliRunResult result) => ShowInfo(ResultError(result), InfoBarSeverity.Error);

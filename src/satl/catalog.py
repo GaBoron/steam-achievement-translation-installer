@@ -15,6 +15,12 @@ from typing import Any, Callable
 from satl import __version__
 from satl.errors import CatalogError, IntegrityError
 from satl.models import Catalog, CatalogEntry, SchemaVariant
+from satl.network import (
+    NetworkConfigurationError,
+    NetworkTransport,
+    describe_network_error,
+    is_network_error,
+)
 
 REPOSITORY = "GaBoron/steam-achievement-translation-library"
 RAW_ROOT = f"https://raw.githubusercontent.com/{REPOSITORY}/main"
@@ -191,9 +197,12 @@ class CatalogRepository:
         self.catalog_urls = catalog_urls
         self.roots = roots
         self._opener = opener
-        self._direct_opener = direct_opener or urllib.request.build_opener(
-            urllib.request.ProxyHandler({})
-        ).open
+        try:
+            self._transport = None if opener is not None else NetworkTransport(
+                direct_opener=direct_opener
+            )
+        except NetworkConfigurationError as exc:
+            raise CatalogError(f"网络设置无效：{exc}") from exc
 
     @property
     def catalog_cache(self) -> Path:
@@ -210,20 +219,11 @@ class CatalogRepository:
         )
         if self._opener is not None:
             return self._opener(request, timeout=timeout)
-        try:
-            return urllib.request.urlopen(request, timeout=timeout)
-        except (OSError, urllib.error.URLError, TimeoutError) as proxy_error:
-            if not urllib.request.getproxies():
-                raise
-            try:
-                return self._direct_opener(request, timeout=timeout)
-            except (OSError, urllib.error.URLError, TimeoutError) as direct_error:
-                raise urllib.error.URLError(
-                    f"代理连接失败：{proxy_error}；无代理直连失败：{direct_error}"
-                ) from direct_error
+        assert self._transport is not None
+        return self._transport.open(request, timeout)
 
     def _fetch_catalog(self, *, persist: bool = True) -> Catalog:
-        errors: list[str] = []
+        errors: list[BaseException] = []
         for url in self.catalog_urls:
             try:
                 separator = "&" if "?" in url else "?"
@@ -237,10 +237,15 @@ class CatalogRepository:
                     self._atomic_write(self.catalog_cache, payload)
                 return catalog
             except CatalogError as exc:
-                errors.append(f"{url}: {exc}")
+                errors.append(exc)
             except (OSError, urllib.error.URLError, TimeoutError) as exc:
-                errors.append(f"{url}: {exc}")
-        raise CatalogError("无法下载 index.json：" + "；".join(errors))
+                errors.append(exc)
+        network_error = next((error for error in reversed(errors) if is_network_error(error)), None)
+        if network_error is not None:
+            raise CatalogError(
+                "无法获取在线翻译目录：" + describe_network_error(network_error)
+            ) from network_error
+        raise CatalogError("在线翻译目录返回了无法识别的数据，请稍后重试或使用本地缓存。")
 
     def refresh(self) -> Catalog:
         return self._fetch_catalog(persist=True)
@@ -298,10 +303,10 @@ class CatalogRepository:
             except (OSError, urllib.error.URLError, TimeoutError) as exc:
                 failures.append(SatlDownloadFailure(url, exc, False))
         integrity = next((failure for failure in failures if failure.integrity), None)
-        details = "；".join(f"{failure.url}: {failure.error}" for failure in failures)
         if integrity is not None:
-            raise IntegrityError("所有来源均未提供通过校验的文件：" + details)
-        raise CatalogError("无法下载 schema：" + details)
+            raise IntegrityError("下载的翻译文件未通过完整性校验。请稍后重试；如果问题持续，请报告此问题。")
+        error = failures[-1].error if failures else OSError()
+        raise CatalogError("无法下载翻译文件：" + describe_network_error(error))
 
     def read_schema_bytes(self, variant: SchemaVariant, *, offline: bool = False) -> bytes:
         """Read a verified schema for preview without mutating the schema cache."""
@@ -331,10 +336,10 @@ class CatalogRepository:
             except (OSError, urllib.error.URLError, TimeoutError) as exc:
                 failures.append(SatlDownloadFailure(url, exc, False))
         integrity = next((failure for failure in failures if failure.integrity), None)
-        details = "；".join(f"{failure.url}: {failure.error}" for failure in failures)
         if integrity is not None:
-            raise IntegrityError("所有来源均未提供通过校验的文件：" + details)
-        raise CatalogError("无法读取 schema 预览：" + details)
+            raise IntegrityError("下载的翻译预览未通过完整性校验。请稍后重试。")
+        error = failures[-1].error if failures else OSError()
+        raise CatalogError("无法读取翻译预览：" + describe_network_error(error))
 
     def _download_and_verify(self, url: str, destination: Path, variant: SchemaVariant) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)

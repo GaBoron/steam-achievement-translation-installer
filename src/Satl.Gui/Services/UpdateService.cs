@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Satl_Gui.Models;
 
 namespace Satl_Gui.Services;
 
@@ -23,10 +24,10 @@ public sealed class UpdateService
     private static readonly Uri DefaultFeedEndpoint = new($"{RepositoryUrl}/releases.atom");
     private static readonly Uri DefaultApiEndpoint = new(
         "https://api.github.com/repos/GaBoron/steam-achievement-translation-installer/releases/latest");
-    private static readonly HttpClient SharedClient = CreateClient();
     private const long MaximumInstallerBytes = 1024L * 1024 * 1024;
 
-    private readonly HttpClient _client;
+    private HttpClient _client;
+    private readonly bool _managesClient;
     private readonly Version _currentVersion;
     private readonly Uri _endpoint;
     private readonly Uri? _feedEndpoint;
@@ -42,7 +43,8 @@ public sealed class UpdateService
         Uri? feedEndpoint = null,
         Uri? apiEndpoint = null)
     {
-        _client = client ?? SharedClient;
+        _managesClient = client is null;
+        _client = client ?? NetworkHttpClientFactory.Create();
         _currentVersion = currentVersion ?? CurrentVersion;
         _endpoint = endpoint ?? DefaultEndpoint;
         _fallbackEnabled = endpoint is null || feedEndpoint is not null || apiEndpoint is not null;
@@ -52,6 +54,18 @@ public sealed class UpdateService
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SteamAchievementTranslationInstaller",
             "updates");
+    }
+
+    public void ConfigureNetwork(NetworkSettings settings)
+    {
+        if (!_managesClient)
+        {
+            return;
+        }
+        var replacement = NetworkHttpClientFactory.Create(settings);
+        var previous = _client;
+        _client = replacement;
+        previous.Dispose();
     }
 
     public static Version CurrentVersion =>
@@ -388,11 +402,6 @@ public sealed class UpdateService
         }
         throw new InvalidDataException($"SHA256SUMS.txt 中没有 {fileName} 的校验值。");
     }
-
-    private static HttpClient CreateClient() => new()
-    {
-        Timeout = TimeSpan.FromMinutes(10),
-    };
 
     private static ReleaseMetadata? TryParseReleaseMetadata(string payload)
     {
