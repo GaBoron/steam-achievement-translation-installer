@@ -223,8 +223,8 @@ def test_scan_local_scope_resolves_missing_names_online(
     )
     cached_catalog = CatalogRepository(data_dir).load(offline=True)
     monkeypatch.setattr(
-        "satl.cli._repository",
-        lambda args: SimpleNamespace(load=lambda offline: cached_catalog),
+        "satl.scan_command.CatalogRepository",
+        lambda data_dir: SimpleNamespace(load=lambda offline: cached_catalog),
     )
 
     def resolve_names(resolver, app_ids, progress):
@@ -382,7 +382,7 @@ def test_install_preview_emits_verified_schema_content_without_writes(tmp_path: 
 
 def test_noninteractive_install_requires_yes(tmp_path: Path, monkeypatch, capsys) -> None:
     steam, data_dir = make_fixture(tmp_path)
-    monkeypatch.setattr("satl.cli.sys.stdin.isatty", lambda: False)
+    monkeypatch.setattr("satl.cli_validation.sys.stdin.isatty", lambda: False)
     result = main(
         [
             "install",
@@ -401,7 +401,8 @@ def test_noninteractive_install_requires_yes(tmp_path: Path, monkeypatch, capsys
 
 def test_install_and_status_offline(tmp_path: Path, monkeypatch, capsys) -> None:
     steam, data_dir = make_fixture(tmp_path)
-    monkeypatch.setattr("satl.cli.is_steam_running", lambda: False)
+    monkeypatch.setattr("satl.install_command.is_steam_running", lambda: False)
+    monkeypatch.setattr("satl.restore_command.is_steam_running", lambda: False)
     result = main(
         [
             "install",
@@ -428,7 +429,8 @@ def test_install_and_status_offline(tmp_path: Path, monkeypatch, capsys) -> None
 
 def test_install_and_restore_jsonl_emit_item_results(tmp_path: Path, monkeypatch, capsys) -> None:
     steam, data_dir = make_fixture(tmp_path)
-    monkeypatch.setattr("satl.cli.is_steam_running", lambda: False)
+    monkeypatch.setattr("satl.install_command.is_steam_running", lambda: False)
+    monkeypatch.setattr("satl.restore_command.is_steam_running", lambda: False)
     install_result = main(
         [
             "install",
@@ -488,7 +490,8 @@ def test_install_jsonl_reports_partial_failure(tmp_path: Path, monkeypatch, caps
         }
     )
     catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
-    monkeypatch.setattr("satl.cli.is_steam_running", lambda: False)
+    monkeypatch.setattr("satl.install_command.is_steam_running", lambda: False)
+    monkeypatch.setattr("satl.restore_command.is_steam_running", lambda: False)
 
     result = main(
         [
@@ -546,7 +549,8 @@ def test_non_current_entry_requires_explicit_override(tmp_path: Path, capsys) ->
 
 def test_restore_dry_run_does_not_change_installed_file(tmp_path: Path, monkeypatch, capsys) -> None:
     steam, data_dir = make_fixture(tmp_path)
-    monkeypatch.setattr("satl.cli.is_steam_running", lambda: False)
+    monkeypatch.setattr("satl.install_command.is_steam_running", lambda: False)
+    monkeypatch.setattr("satl.restore_command.is_steam_running", lambda: False)
     assert main(
         [
             "install",
@@ -582,7 +586,8 @@ def test_restore_dry_run_does_not_change_installed_file(tmp_path: Path, monkeypa
 
 def test_restore_preview_reports_delete_when_no_original_existed(tmp_path: Path, monkeypatch, capsys) -> None:
     steam, data_dir = make_fixture(tmp_path, payload=preview_schema_bytes())
-    monkeypatch.setattr("satl.cli.is_steam_running", lambda: False)
+    monkeypatch.setattr("satl.install_command.is_steam_running", lambda: False)
+    monkeypatch.setattr("satl.restore_command.is_steam_running", lambda: False)
     assert main(
         [
             "install",
